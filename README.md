@@ -5,6 +5,10 @@ A minimal, sideloadable Home Assistant dashboard for older LG smart TVs
 switches and sensors with a high-contrast 10-foot UI. Live state changes arrive
 over the Home Assistant WebSocket API.
 
+Available two ways: as a **Home Assistant add-on** (configuration in HA, token
+kept server-side) or a **manual `config/www` deployment** (configuration on the
+TV).
+
 ## Architecture: same-origin on Home Assistant
 
 Home Assistant's browser security policy blocks cross-origin API calls by
@@ -56,7 +60,7 @@ files under `/local/` are public).
 ### Optional: seed the token from a URL
 
 ```
-http://<your-ha-host>:8123/local/halite/index.html?v=0.4.0#<long-lived-token>
+http://<your-ha-host>:8123/local/halite/index.html?v=0.5.0#<long-lived-token>
 ```
 
 The fragment is stored locally and stripped from the address bar.
@@ -85,6 +89,44 @@ Desktop shortcuts: arrows, Enter, `B`/`S` for BLUE, `Esc` to close.
   ```sh
   npm install -g @webosose/ares-cli
   ```
+
+### Add-on installation (Home Assistant OS or Supervised)
+
+This is the simplest path: the add-on serves the dashboard and proxies the
+Home Assistant API, so there is no `config/www` copying and no CORS setup.
+
+1. In Home Assistant, open **Settings -> Add-ons -> Add-on Store**, open the
+   **⋮** menu, choose **Repositories**, and add:
+
+   ```
+   https://github.com/lazarh/ha-lite-webos
+   ```
+
+2. Find **HA Lite** in the store and install it (the add-on builds locally;
+   no prebuilt image is needed).
+
+3. Open its **Configuration** tab and set:
+   - `token` — a long-lived access token,
+   - `entities` — the entity IDs to show on the TV, in order,
+   - optionally `title`, `chart_hours` (history window) and
+     `refresh_seconds` (polling fallback).
+
+4. **Start** the add-on, then open `http://<your-ha-host>:8099/` to check it.
+
+5. Point the TV launcher at the add-on:
+
+   ```sh
+   LAUNCH_URL="http://<your-ha-host>:8099/" ./package.sh
+   ares-install --device tv dist/com.halite.dashboard_0.5.0_all.ipk
+   ares-launch --device tv com.halite.dashboard
+   ```
+
+The token stays in the add-on options; the TV never stores it.
+
+### Manual installation (Home Assistant Core/Container, no Supervisor)
+
+Use this path if add-ons are not available. Configuration is then done on the
+TV itself.
 
 ### Part A — deploy the Home Assistant side
 
@@ -130,31 +172,32 @@ The app must be served by Home Assistant itself, on the same origin as its API
 3. Build the launcher with **your** Home Assistant URL:
 
    ```sh
-   LAUNCH_URL="http://<your-ha-host>:8123/local/halite/index.html?v=0.4.0" ./package.sh
+   LAUNCH_URL="http://<your-ha-host>:8123/local/halite/index.html?v=0.5.0" ./package.sh
    ```
 
-   This produces `dist/com.halite.dashboard_0.4.0_all.ipk` using only `ar` and
+   This produces `dist/com.halite.dashboard_0.5.0_all.ipk` using only `ar` and
    `tar` (no LG SDK required). The URL is baked in at build time, so every
    installation builds its own IPK.
 
 4. Install and launch:
 
    ```sh
-   ares-install --device tv dist/com.halite.dashboard_0.4.0_all.ipk
+   ares-install --device tv dist/com.halite.dashboard_0.5.0_all.ipk
    ares-launch --device tv com.halite.dashboard
    ```
 
    If you have the SDK, `ares-package launcher -o dist` also works after setting
    `LAUNCH_URL` in `launcher/index.html`.
 
-### First run
+### First run (manual/on-TV mode)
 
-The app opens **Settings** automatically. Enter the token with the D-pad
-keyboard, choose **Connect & choose tiles**, pick entities, and save. The token
-is stored only on the TV.
+With the manual install the app opens **Settings** automatically. Enter the
+token with the D-pad keyboard, choose **Connect & choose tiles**, pick entities,
+and save. The token is stored only on the TV. (With the add-on, tiles come from
+the add-on options and settings are disabled.)
 
 Optional: seed the token once via the URL fragment
-`.../index.html?v=0.4.0#<token>` instead of typing it; it is stored and then
+`.../index.html?v=0.5.0#<token>` instead of typing it; it is stored and then
 stripped from the address bar.
 
 ### Updating
@@ -167,8 +210,10 @@ stripped from the address bar.
 
 | Symptom | Fix |
 |---|---|
-| TV shows OFFLINE | Confirm the TV can reach `http://<your-ha-host>:8123` and the IP/host is correct. |
-| `TOKEN ERR` | The token is wrong or revoked; press BLUE and re-enter it. |
+| TV shows OFFLINE | Confirm the TV can reach `http://<your-ha-host>:8123` (manual) or the add-on port (e.g. `:8099`) and the IP/host is correct. |
+| Add-on page does not load | Check the add-on is **started** and port `8099` is reachable from the TV's network. |
+| Add-on shows "Configure the add-on" | Set `token` and `entities` in the add-on options, then restart it. |
+| `TOKEN ERR` | The token is wrong or revoked; fix it in the add-on options (or re-enter it on the TV in manual mode). |
 | The app does not update | Bump `?v=` and reinstall/relaunch; HA caches `/local/` for 31 days. |
 | `https://` with a self-signed certificate | The TV does not trust it; use plain `http://` on the LAN or a trusted certificate. |
 | Launcher says "not configured" | The IPK was built without `LAUNCH_URL`; rebuild with your URL. |
