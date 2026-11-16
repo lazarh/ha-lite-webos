@@ -52,7 +52,7 @@ files under `/local/` are public).
 ### Optional: seed the token from a URL
 
 ```
-http://<ha-host>:8123/local/halite/index.html?v=0.3.0#<long-lived-token>
+http://<ha-host>:8123/local/halite/index.html?v=0.3.1#<long-lived-token>
 ```
 
 The fragment is stored locally and stripped from the address bar.
@@ -86,7 +86,7 @@ Desktop shortcuts: arrows, Enter, `B`/`S` for BLUE, `Esc` to close.
 
    ```sh
    ares-package launcher -o dist
-   ares-install --device tv dist/com.halite.dashboard_0.3.0_all.ipk
+   ares-install --device tv dist/com.halite.dashboard_0.3.1_all.ipk
    ares-launch --device tv com.halite.dashboard
    ```
 
