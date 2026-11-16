@@ -47,7 +47,7 @@ Install the HA Lite launcher (sideload) and point it at the add-on URL:
 
 ```sh
 LAUNCH_URL="http://<your-ha-host>:8099/" ./package.sh
-ares-install --device tv dist/com.halite.dashboard_0.6.0_all.ipk
+ares-install --device tv dist/com.halite.dashboard_0.6.1_all.ipk
 ares-launch --device tv com.halite.dashboard
 ```
 
