@@ -1,0 +1,10 @@
+{
+  "id": "com.halite.dashboard",
+  "version": "0.1.0",
+  "vendor": "HA Lite",
+  "type": "web",
+  "main": "index.html",
+  "title": "HA Lite",
+  "icon": "icon.png",
+  "largeIcon": "largeIcon.png"
+}

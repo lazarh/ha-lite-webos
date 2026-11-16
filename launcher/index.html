@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HA Lite</title>
+<style>
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #000;
+  color: #f2f2f2;
+  font-family: "LG Smart UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+#splash {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#brand {
+  font-size: 64px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #fff;
+}
+
+#brand .accent {
+  color: #ffd400;
+}
+
+#text {
+  margin-top: 26px;
+  font-size: 26px;
+  letter-spacing: 2px;
+  color: #8a8a8a;
+}
+
+#target {
+  margin-top: 18px;
+  font-size: 18px;
+  color: #4a4a4a;
+}
+</style>
+</head>
+<body>
+<div id="splash">
+  <div id="brand">HA <span class="accent">LITE</span></div>
+  <div id="text">Opening dashboard&hellip;</div>
+  <div id="target"></div>
+</div>
+<script>
+(function (window, document, undefined) {
+  'use strict';
+
+  /*
+   * The real app is hosted by Home Assistant itself (same-origin):
+   *   <config>/www/halite/index.html  ->  /local/halite/
+   * This launcher only exists so the dashboard appears in the TV launcher.
+   */
+  var LAUNCH_URL = 'http://your-ha-host:8123/local/halite/';
+
+  /*
+   * First-run convenience only. Set locally to seed the long-lived token
+   * once (it is forwarded as a URL fragment), then leave empty.
+   * NEVER commit a real token here.
+   */
+  var SEED_TOKEN = '';
+
+  var target = LAUNCH_URL;
+  if (SEED_TOKEN) {
+    target += '#' + SEED_TOKEN;
+  }
+
+  var targetEl = document.getElementById('target');
+  if (targetEl) {
+    targetEl.textContent = LAUNCH_URL;
+  }
+
+  window.location.replace(target);
+})(window, document);
+</script>
+</body>
+</html>
