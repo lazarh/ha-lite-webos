@@ -18,6 +18,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify add-on app is in sync
+        run: |
+          chmod +x scripts/sync-addon.sh
+          ./scripts/sync-addon.sh
+          git diff --exit-code -- addon/webapp/index.html
+
+      - name: Validate repository files
+        run: |
+          python3 -c 'import json; json.load(open("repository.json"))'
+          grep -q '^slug: ha_lite$' addon/config.yaml
+
       - name: Build IPK (ar + tar, no SDK)
         run: |
           chmod +x package.sh

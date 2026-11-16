@@ -1,0 +1,31 @@
+name: HA Lite
+version: "0.5.0"
+slug: ha_lite
+description: High-contrast Home Assistant dashboard for LG webOS 3.x TVs
+url: https://github.com/lazarh/ha-lite-webos
+arch:
+  - amd64
+  - aarch64
+  - armv7
+  - armhf
+  - i386
+init: false
+startup: application
+boot: auto
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: HA Lite dashboard (open this on the TV)
+options:
+  token: ""
+  entities: []
+  title: HA Lite
+  chart_hours: 24
+  refresh_seconds: 10
+schema:
+  token: password
+  entities:
+    - str
+  title: str
+  chart_hours: int(1,168)
+  refresh_seconds: int(1,3600)

@@ -1,0 +1,2858 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HA Lite</title>
+<style>
+/* HA Lite Phase 3 - WebSocket live updates, sensor tiles and 24h charts.
+   Target: LG webOS 3.x, Chromium 38. ES5 only, same-origin REST/WS.
+   Deliberately avoids CSS grid, custom properties, flexbox gap and animations. */
+
+html {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: #f2f2f2;
+  font-family: "LG Smart UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+.hidden {
+  display: none !important;
+}
+
+#stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ------------------------------------------------------------ top bar */
+
+#topbar {
+  height: 104px;
+  box-sizing: border-box;
+  padding: 22px 40px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#brand {
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #ffffff;
+}
+
+#brand .accent {
+  color: #ffd400;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  height: 46px;
+  padding: 0 22px;
+  border: 2px solid #333333;
+  border-radius: 23px;
+  background: #0a0a0a;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #9a9a9a;
+}
+
+.status .dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: #777777;
+  margin-right: 12px;
+}
+
+.status.loading,
+.status.auth,
+.status.noconfig,
+.status.reconnecting {
+  color: #ff9f1a;
+  border-color: #4a2f00;
+}
+
+.status.loading .dot,
+.status.auth .dot,
+.status.noconfig .dot,
+.status.reconnecting .dot {
+  background: #ff9f1a;
+}
+
+.status.online {
+  color: #35e07a;
+  border-color: #0d4023;
+}
+
+.status.online .dot {
+  background: #35e07a;
+}
+
+.status.offline {
+  color: #ff4d4d;
+  border-color: #4a0d0d;
+}
+
+.status.offline .dot {
+  background: #ff4d4d;
+}
+
+/* -------------------------------------------------------------- grid */
+
+#main {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: center;
+  box-sizing: border-box;
+  padding: 10px 20px;
+  overflow-y: auto;
+}
+
+#grid.scroll {
+  align-content: flex-start;
+}
+
+#grid.centered {
+  overflow: hidden;
+}
+
+.tile {
+  position: relative;
+  box-sizing: border-box;
+  width: 560px;
+  height: 392px;
+  margin: 17px;
+  padding: 36px 40px;
+  display: flex;
+  flex-direction: column;
+  background: #0e0e0e;
+  border: 2px solid #262626;
+  border-radius: 18px;
+  color: #f2f2f2;
+  transition: transform 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.tile.focused {
+  z-index: 2;
+  transform: scale(1.015);
+  box-shadow: 0 0 0 8px #29d6ff, 0 20px 60px rgba(0, 0, 0, 0.65);
+}
+
+.tile.pressed {
+  transform: scale(0.985);
+}
+
+.tile.on {
+  background: #ffd400;
+  border-color: #ffd400;
+  color: #000000;
+}
+
+.badge {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #8f8f8f;
+}
+
+.tile.on .badge {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.name {
+  margin-top: 22px;
+  max-height: 86px;
+  font-size: 34px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+}
+
+.value {
+  margin-top: auto;
+  font-size: 64px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  line-height: 1;
+  word-break: break-word;
+}
+
+/* ------------------------------------------------------- sensor tiles */
+
+.sensor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.icon {
+  width: 54px;
+  height: 54px;
+  color: #ffd400;
+}
+
+.icon svg {
+  display: block;
+  width: 54px;
+  height: 54px;
+}
+
+.sensor-tile .badge {
+  margin-left: 16px;
+  text-align: right;
+}
+
+.sensor-tile .name {
+  margin-top: 14px;
+  max-height: 68px;
+  font-size: 28px;
+}
+
+.sensor-readout {
+  margin-top: auto;
+  display: flex;
+  align-items: baseline;
+  overflow: hidden;
+}
+
+.sensor-readout .value {
+  margin-top: 0;
+  font-size: 58px;
+  line-height: 1;
+  color: #31d7ff;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.sensor-readout .unit {
+  margin-left: 10px;
+  font-size: 28px;
+  color: #8a8a8a;
+}
+
+.sensor-tile.alert .sensor-readout .value {
+  color: #ff9f1a;
+}
+
+.spark {
+  display: block;
+  width: 100%;
+  height: 80px;
+  margin-top: 14px;
+}
+
+#empty {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 40px;
+  text-align: center;
+}
+
+#empty .empty-title {
+  font-size: 44px;
+  font-weight: 700;
+  color: #ffd400;
+}
+
+#empty .empty-text {
+  margin-top: 22px;
+  font-size: 28px;
+  color: #b0b0b0;
+}
+
+#empty .empty-text b {
+  color: #29d6ff;
+}
+
+/* ------------------------------------------------------------ footer */
+
+#footer {
+  height: 64px;
+  padding-bottom: 14px;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 21px;
+  letter-spacing: 2px;
+  color: #7c7c7c;
+}
+
+/* ------------------------------------------------------------- toast */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  width: 720px;
+  margin-left: -360px;
+  box-sizing: border-box;
+  padding: 18px 26px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #ffffff;
+  background: #141414;
+  border: 2px solid #3a3a3a;
+  border-radius: 14px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7);
+  z-index: 45;
+}
+
+.toast.warn {
+  color: #ffb340;
+  border-color: #6b4a00;
+}
+
+.toast.error {
+  color: #ff6b6b;
+  border-color: #5a1010;
+}
+
+.toast.ok {
+  color: #35e07a;
+  border-color: #0d4023;
+}
+
+/* ---------------------------------------------------------- overlays */
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 50;
+}
+
+#keyboard {
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.panel {
+  background: #0a0a0a;
+  border: 2px solid #333333;
+  border-radius: 20px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.8);
+}
+
+.panel-title {
+  padding: 28px 40px 0;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #ffd400;
+}
+
+.panel-footer {
+  padding: 16px 40px 24px;
+  font-size: 19px;
+  letter-spacing: 2px;
+  color: #777777;
+}
+
+/* ---------------------------------------------------------- settings */
+
+.settings-panel {
+  width: 1100px;
+  max-height: 94%;
+}
+
+.form-body {
+  padding: 24px 40px 8px;
+}
+
+.field {
+  margin-bottom: 16px;
+  padding: 18px 24px;
+  border: 2px solid #333333;
+  border-radius: 14px;
+  background: #101010;
+}
+
+.field.focused,
+.btn.focused {
+  border-color: #29d6ff;
+  background: #0a2229;
+  box-shadow: 0 0 0 4px rgba(41, 214, 255, 0.3);
+}
+
+.field-label {
+  font-size: 19px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #8a8a8a;
+}
+
+.field-value {
+  margin-top: 8px;
+  font-size: 28px;
+  color: #f2f2f2;
+  word-break: break-all;
+}
+
+.field-note {
+  margin-top: 8px;
+  font-size: 19px;
+  color: #6f6f6f;
+}
+
+.form-error {
+  margin: 4px 0 12px;
+  font-size: 22px;
+  color: #ff6b6b;
+}
+
+.form-actions {
+  display: flex;
+  padding: 8px 0 6px;
+}
+
+.btn {
+  padding: 18px 40px;
+  margin-right: 20px;
+  font-size: 26px;
+  font-weight: 600;
+  text-align: center;
+  color: #f2f2f2;
+  background: #141414;
+  border: 2px solid #3a3a3a;
+  border-radius: 14px;
+}
+
+.btn.primary {
+  background: #ffd400;
+  border-color: #ffd400;
+  color: #000000;
+}
+
+.btn.primary.focused {
+  border-color: #29d6ff;
+  box-shadow: 0 0 0 4px rgba(41, 214, 255, 0.5);
+}
+
+/* ------------------------------------------------------- entity picker */
+
+.picker-tabs {
+  display: flex;
+  margin-bottom: 14px;
+}
+
+.ptab {
+  margin-right: 14px;
+  padding: 9px 22px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #8a8a8a;
+  background: #101010;
+  border: 2px solid #2a2a2a;
+  border-radius: 10px;
+}
+
+.ptab.active {
+  color: #000000;
+  background: #ffd400;
+  border-color: #ffd400;
+}
+
+.field,
+.btn,
+.entity-row,
+.ptab {
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.entity-hint {
+  margin-bottom: 14px;
+  font-size: 22px;
+  letter-spacing: 1px;
+  color: #9a9a9a;
+}
+
+.entity-list {
+  position: relative;
+  max-height: 440px;
+  overflow-y: auto;
+  border: 2px solid #2a2a2a;
+  border-radius: 14px;
+  background: #0b0b0b;
+}
+
+.entity-row {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #1c1c1c;
+}
+
+.entity-row.focused {
+  background: #0a2229;
+  box-shadow: inset 0 0 0 3px #29d6ff;
+}
+
+.chk {
+  width: 26px;
+  height: 26px;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  margin-right: 20px;
+  border: 3px solid #555555;
+  border-radius: 6px;
+  background: #000000;
+}
+
+.chk.on {
+  background: #ffd400;
+  border-color: #ffd400;
+}
+
+.row-name {
+  flex: 1;
+  font-size: 26px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-meta {
+  flex: 0 0 auto;
+  max-width: 420px;
+  margin-left: 18px;
+  font-size: 20px;
+  color: #8a8a8a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#save-entities {
+  margin-top: 6px;
+}
+
+/* ---------------------------------------------------------- keyboard */
+
+.kb-panel {
+  width: 1240px;
+}
+
+.kb-header {
+  padding: 22px 34px;
+  border-bottom: 1px solid #242424;
+}
+
+.kb-value {
+  margin-top: 8px;
+  min-height: 38px;
+  font-size: 30px;
+  color: #ffffff;
+  word-break: break-all;
+}
+
+.kb-grid {
+  padding: 20px 24px 8px;
+}
+
+.kb-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.kb-key {
+  box-sizing: border-box;
+  margin: 0 4px;
+  min-width: 70px;
+  height: 66px;
+  padding: 0 10px;
+  font-size: 28px;
+  color: #f2f2f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #333333;
+  border-radius: 12px;
+  background: #141414;
+}
+
+.kb-key.wide {
+  min-width: 116px;
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+
+.kb-key.focused {
+  background: #0a2229;
+  border-color: #29d6ff;
+  box-shadow: 0 0 0 4px rgba(41, 214, 255, 0.35);
+  color: #ffffff;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(41, 214, 255, 0.35);
+  border-radius: 5px;
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <header id="topbar">
+    <div id="brand">HA <span class="accent">LITE</span></div>
+    <div id="status" class="status loading" aria-live="polite">
+      <span class="dot"></span><span id="status-text">LOADING</span>
+    </div>
+  </header>
+
+  <main id="main">
+    <div id="grid" class="centered"></div>
+    <div id="empty" class="hidden">
+      <div class="empty-title" id="empty-title">No tiles yet</div>
+      <div class="empty-text" id="empty-text">Press <b>BLUE</b> on the remote to configure Home Assistant.</div>
+    </div>
+  </main>
+
+  <footer id="footer">D-PAD Move &nbsp;&middot;&nbsp; OK Toggle &nbsp;&middot;&nbsp; BLUE Settings</footer>
+</div>
+
+<div id="toast" class="toast hidden" role="status" aria-live="polite">
+  <span id="toast-text"></span>
+</div>
+
+<div id="settings" class="overlay hidden">
+  <div class="panel settings-panel">
+    <div class="panel-title">Settings</div>
+    <div class="form-body">
+      <div id="connection-view">
+        <div class="field focusable" data-action="edit-url">
+          <div class="field-label">Server URL</div>
+          <div class="field-value" id="value-url">(default)</div>
+          <div class="field-note">Defaults to this page's origin, which avoids browser CORS restrictions.</div>
+        </div>
+        <div class="field focusable" data-action="edit-token">
+          <div class="field-label">Access token</div>
+          <div class="field-value" id="value-token">(not set)</div>
+          <div class="field-note">Home Assistant: Profile &rarr; Long-lived access tokens. Press OK to type.</div>
+        </div>
+        <div class="form-error hidden" id="settings-error"></div>
+        <div class="form-actions">
+          <div class="btn primary focusable" data-action="connect" id="connect-btn">Connect &amp; choose tiles</div>
+          <div class="btn focusable" data-action="cancel">Cancel</div>
+        </div>
+      </div>
+
+      <div id="entity-view" class="hidden">
+        <div class="picker-tabs" id="picker-tabs">
+          <span class="ptab active" id="tab-toggles">Toggles</span>
+          <span class="ptab" id="tab-sensors">Sensors</span>
+        </div>
+        <div class="entity-hint" id="entity-hint">Choose tiles with OK</div>
+        <div class="entity-list" id="entity-list"></div>
+        <div class="form-error hidden" id="entity-error"></div>
+        <div class="form-actions">
+          <div class="btn primary" id="save-entities">Save selection</div>
+        </div>
+      </div>
+    </div>
+    <div class="panel-footer">UP/DOWN move &nbsp;&middot;&nbsp; LEFT/RIGHT tabs &nbsp;&middot;&nbsp; OK select &nbsp;&middot;&nbsp; BLUE close</div>
+  </div>
+</div>
+
+<div id="keyboard" class="overlay hidden">
+  <div class="panel kb-panel">
+    <div class="kb-header">
+      <div class="field-label" id="kb-label">Value</div>
+      <div class="kb-value" id="kb-value">(empty)</div>
+    </div>
+    <div class="kb-grid" id="kb-grid"></div>
+    <div class="panel-footer">ARROWS move &nbsp;&middot;&nbsp; OK type &nbsp;&middot;&nbsp; BLUE cancel</div>
+  </div>
+</div>
+
+<script>
+(function (window, document, undefined) {
+  'use strict';
+
+  /* ------------------------------------------------------------ config */
+
+  var STORAGE_KEY = 'halite.config.v1';
+  var LEGACY_TOKEN_KEY = 'halite.token';
+  var TOGGLE_DOMAINS = ['switch', 'light', 'input_boolean'];
+  var SENSOR_DOMAINS = ['sensor', 'binary_sensor'];
+  var MAX_TILES = 12;
+  var POLL_MS = 10000;
+  var HISTORY_HOURS = 24;
+  var HISTORY_REFRESH_MS = 300000;
+  var WS_RETRY_MS = 5000;
+  var COLS = 3;
+  var MAX_ROWS_BEFORE_SCROLL = 2;
+
+  var KEYS = {
+    BACK: 461,
+    ESC: 27,
+    ENTER: 13,
+    LEFT: 37,
+    UP: 38,
+    RIGHT: 39,
+    DOWN: 40,
+    BLUE: 406
+  };
+
+  /* ------------------------------------------------------------- state */
+
+  var config = { url: '', token: '', entities: [] };
+  var entityCache = {};
+
+  var dash = { items: [], els: [], focus: 0 };
+  var gen = 0;
+  var pollTimer = null;
+  var historyTimer = null;
+  var historyDebounce = null;
+
+  var ws = null;
+  var wsOpen = false;
+  var wsAuthFailed = false;
+  var wsRetryTimer = null;
+
+  var settings = {
+    open: false,
+    view: 'connection',
+    focus: 0,
+    pending: { url: '', token: '' },
+    connecting: false,
+    session: 0
+  };
+
+  var picker = {
+    tab: 'toggles',
+    toggleItems: [],
+    sensorItems: [],
+    items: [],
+    selected: {},
+    focus: 0,
+    rowEls: []
+  };
+
+  var connFields = [];
+  var keyboard = null;
+
+  var el = {};
+
+  var pressed = -1;
+  var toastTimer = null;
+  var addonMode = false;
+  var health = { offline: false, auth: false, wsDown: false };
+  var wsPending = {};
+  var wsFrame = null;
+  var raf = window.requestAnimationFrame
+    ? function (fn) { return window.requestAnimationFrame(fn); }
+    : function (fn) { return window.setTimeout(fn, 16); };
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  function div(className) {
+    var node = document.createElement('div');
+    if (className) {
+      node.className = className;
+    }
+    return node;
+  }
+
+  function span(className) {
+    var node = document.createElement('span');
+    if (className) {
+      node.className = className;
+    }
+    return node;
+  }
+
+  function domainOf(entityId) {
+    var dot = entityId.indexOf('.');
+    return dot === -1 ? '' : entityId.substring(0, dot);
+  }
+
+  function normalizeBase(url) {
+    return String(url || '').replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
+  }
+
+  function parseJson(text) {
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function isToggleEntity(item) {
+    return TOGGLE_DOMAINS.indexOf(item.domain) !== -1;
+  }
+
+  function isSensorEntity(item) {
+    return SENSOR_DOMAINS.indexOf(item.domain) !== -1;
+  }
+
+  function modelFromState(data) {
+    var attrs = data.attributes || {};
+    return {
+      entity_id: data.entity_id,
+      domain: domainOf(data.entity_id),
+      name: attrs.friendly_name || data.entity_id,
+      state: data.state,
+      unit: attrs.unit_of_measurement || '',
+      deviceClass: attrs.device_class || '',
+      stateClass: attrs.state_class || '',
+      precision: attrs.suggested_display_precision
+    };
+  }
+
+  function formatSensorValue(item, value) {
+    var text = String(value === undefined || value === null ? '' : value);
+    if (!/^-?\d+(\.\d+)?$/.test(text)) {
+      return text;
+    }
+
+    var number = parseFloat(text);
+    if (isNaN(number) || !isFinite(number)) {
+      return text;
+    }
+
+    var precision = item.precision;
+    if (precision !== undefined && precision !== null && precision !== '') {
+      var p = parseInt(precision, 10);
+      if (!isNaN(p) && p >= 0 && p <= 4) {
+        return number.toFixed(p);
+      }
+    }
+
+    if (Math.abs(number) >= 1000) {
+      return String(Math.round(number));
+    }
+    var rounded = Math.round(number * 10) / 10;
+    return String(rounded);
+  }
+
+  function valueFor(item) {
+    if (isSensorEntity(item)) {
+      var s = item.state;
+      if (s === undefined || s === null || s === '') {
+        return '...';
+      }
+      if (s === '...' || s === 'unknown' || s === 'unavailable') {
+        return s === '...' ? '...' : String(s).toUpperCase();
+      }
+      if (item.domain === 'binary_sensor') {
+        return binaryLabel(item);
+      }
+      return formatSensorValue(item, s);
+    }
+    if (item.state === 'on') {
+      return 'ON';
+    }
+    if (item.state === 'off') {
+      return 'OFF';
+    }
+    return String(item.state || '...').toUpperCase();
+  }
+
+  function binaryLabel(item) {
+    var on = item.state === 'on';
+    var dc = item.deviceClass;
+    if (dc === 'door' || dc === 'window' || dc === 'garage_door' || dc === 'opening') {
+      return on ? 'OPEN' : 'CLOSED';
+    }
+    if (dc === 'motion' || dc === 'occupancy' || dc === 'presence') {
+      return on ? 'DETECTED' : 'CLEAR';
+    }
+    if (dc === 'moisture') {
+      return on ? 'WET' : 'DRY';
+    }
+    if (dc === 'smoke' || dc === 'gas' || dc === 'carbon_monoxide') {
+      return on ? 'ALERT' : 'CLEAR';
+    }
+    if (dc === 'tamper') {
+      return on ? 'TAMPER' : 'CLEAR';
+    }
+    return on ? 'ON' : 'OFF';
+  }
+
+  function unitFor(item) {
+    if (item.domain !== 'sensor') {
+      return '';
+    }
+    return item.unit || '';
+  }
+
+  /* -------------------------------------------------------------- icons */
+
+  var ICON_BUILDERS = {
+    temperature: function () {
+      return '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 9v6"/>';
+    },
+    humidity: function () {
+      return '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>';
+    },
+    power: function () {
+      return '<path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/>';
+    },
+    energy: function () {
+      return '<path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/>';
+    },
+    voltage: function () {
+      return '<path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/>';
+    },
+    current: function () {
+      return '<path d="M3 12c3-5 6-5 9 0s6 5 9 0"/>';
+    },
+    battery: function () {
+      return '<rect x="3" y="8" width="16" height="8" rx="2"/><path d="M21 11v2"/>';
+    },
+    pressure: function () {
+      return '<circle cx="12" cy="12" r="8"/><path d="M12 12l4-3"/>';
+    },
+    signal_strength: function () {
+      return '<path d="M4 20v-3M9 20v-6M14 20v-9M19 20V5"/>';
+    },
+    illuminance: function () {
+      return '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>';
+    },
+    door: function () {
+      return '<path d="M6 3h12v18H6z"/><path d="M15 12h.01"/>';
+    },
+    window: function () {
+      return '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M12 4v16M4 12h16"/>';
+    },
+    motion: function () {
+      return '<circle cx="12" cy="6" r="2"/><path d="M12 8v6l-3 4M12 14l3 4M7 11l5-1 5 1"/>';
+    },
+    smoke: function () {
+      return '<path d="M5 15a4 4 0 0 1 1-7 5 5 0 0 1 9 1 3 3 0 0 1 1 6z"/>';
+    },
+    moisture: function () {
+      return '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>';
+    },
+    sensor: function () {
+      return '<circle cx="12" cy="12" r="8"/><path d="M12 12l4-3"/>';
+    }
+  };
+
+  function iconSvg(item) {
+    var key = item.deviceClass || '';
+    if (!ICON_BUILDERS[key]) {
+      key = 'sensor';
+    }
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+      'stroke-linecap="round" stroke-linejoin="round">' + ICON_BUILDERS[key]() + '</svg>';
+  }
+
+  /* --------------------------------------------------------- storage */
+
+  function loadConfig() {
+    var cfg = { url: '', token: '', entities: [] };
+    var raw = null;
+
+    try {
+      raw = window.localStorage.getItem(STORAGE_KEY);
+    } catch (e) {
+      raw = null;
+    }
+
+    if (raw) {
+      var data = parseJson(raw);
+      if (data) {
+        if (typeof data.url === 'string') {
+          cfg.url = data.url;
+        }
+        if (typeof data.token === 'string') {
+          cfg.token = data.token;
+        }
+        if (data.entities && data.entities.length !== undefined) {
+          var i;
+          for (i = 0; i < data.entities.length; i++) {
+            if (typeof data.entities[i] === 'string') {
+              cfg.entities.push(data.entities[i]);
+            }
+          }
+        }
+      }
+    } else {
+      try {
+        var legacy = window.localStorage.getItem(LEGACY_TOKEN_KEY);
+        if (legacy) {
+          cfg.token = legacy;
+        }
+      } catch (e2) {
+        /* ignore */
+      }
+    }
+
+    if (!cfg.url) {
+      cfg.url = window.location.origin;
+    }
+    return cfg;
+  }
+
+  function saveConfig() {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      window.localStorage.removeItem(LEGACY_TOKEN_KEY);
+    } catch (e) {
+      /* storage may be unavailable */
+    }
+  }
+
+  function seedFromHash() {
+    var hash = window.location.hash || '';
+    if (hash.length > 1) {
+      var raw = hash.substring(1);
+      if (raw.length > 5) {
+        config.token = raw;
+        saveConfig();
+        try {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch (e) {
+          /* ignore */
+        }
+      }
+    }
+  }
+
+  /* -------------------------------------------------------------- http */
+
+  function httpRequest(opts, callback) {
+    var called = false;
+
+    function finish(status, text) {
+      if (called) {
+        return;
+      }
+      called = true;
+      callback(status, text);
+    }
+
+    var base = opts.base !== undefined ? normalizeBase(opts.base) : normalizeBase(config.url);
+    var token = opts.token !== undefined ? opts.token : config.token;
+    var url = opts.path;
+    if (base && base !== window.location.origin) {
+      url = base + opts.path;
+    }
+
+    var xhr = new XMLHttpRequest();
+    try {
+      xhr.open(opts.method || 'GET', url, true);
+    } catch (e) {
+      finish(0, '');
+      return;
+    }
+
+    xhr.timeout = 10000;
+    try {
+      xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+      if (opts.body) {
+        xhr.setRequestHeader('Content-Type', 'application/json');
+      }
+    } catch (e2) {
+      /* ignore */
+    }
+
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) {
+        return;
+      }
+      var status = 0;
+      var text = '';
+      try {
+        status = xhr.status;
+      } catch (e3) {
+        status = 0;
+      }
+      try {
+        text = xhr.responseText || '';
+      } catch (e4) {
+        text = '';
+      }
+      finish(status, text);
+    };
+    xhr.onerror = function () {
+      finish(0, '');
+    };
+    xhr.ontimeout = function () {
+      finish(0, '');
+    };
+
+    try {
+      xhr.send(opts.body ? JSON.stringify(opts.body) : null);
+    } catch (e5) {
+      finish(0, '');
+    }
+  }
+
+  /* -------------------------------------------------------- dashboard */
+
+  function setStatus(kind, text) {
+    el.status.className = 'status ' + kind;
+    el.statusText.textContent = text;
+  }
+
+  function showToast(text, kind, duration) {
+    if (!el.toast || !el.toastText) {
+      return;
+    }
+    el.toastText.textContent = text;
+    el.toast.className = 'toast ' + (kind || 'warn');
+    if (toastTimer) {
+      window.clearTimeout(toastTimer);
+    }
+    toastTimer = window.setTimeout(function () {
+      toastTimer = null;
+      if (el.toast) {
+        el.toast.className = 'toast hidden';
+      }
+    }, duration || 4000);
+  }
+
+  function hideToast() {
+    if (toastTimer) {
+      window.clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+    if (el.toast) {
+      el.toast.className = 'toast hidden';
+    }
+  }
+
+  function resetHealth() {
+    health = { offline: false, auth: false, wsDown: false };
+    hideToast();
+  }
+
+  function markOnline() {
+    if (health.wsDown) {
+      setStatus('reconnecting', 'RECONNECTING');
+    } else {
+      setStatus('online', 'ONLINE');
+    }
+    if (health.offline || health.auth) {
+      showToast('Connected to Home Assistant', 'ok');
+    }
+    health.offline = false;
+    health.auth = false;
+  }
+
+  function markOffline(message) {
+    setStatus('offline', 'OFFLINE');
+    if (!health.offline) {
+      showToast(message || 'Connection lost \u2014 retrying...', 'warn', 5000);
+    }
+    health.offline = true;
+  }
+
+  function markAuth() {
+    setStatus('auth', 'TOKEN ERR');
+    if (!health.auth) {
+      showToast('Token invalid \u2014 press BLUE to fix', 'error', 8000);
+    }
+    health.auth = true;
+  }
+
+  function markWsDown() {
+    if (health.wsDown) {
+      return;
+    }
+    health.wsDown = true;
+    if (!health.offline && !health.auth) {
+      setStatus('reconnecting', 'RECONNECTING');
+    }
+    showToast('Live updates reconnecting...', 'warn', 5000);
+  }
+
+  function markWsUp() {
+    if (!health.wsDown) {
+      return;
+    }
+    health.wsDown = false;
+    if (!health.offline && !health.auth) {
+      setStatus('online', 'ONLINE');
+    }
+    showToast('Live updates restored', 'ok');
+  }
+
+  function modelFor(entityId) {
+    var cached = entityCache[entityId];
+    if (cached) {
+      return {
+        entity_id: cached.entity_id,
+        domain: cached.domain,
+        name: cached.name,
+        state: cached.state,
+        unit: cached.unit,
+        deviceClass: cached.deviceClass,
+        stateClass: cached.stateClass,
+        precision: cached.precision
+      };
+    }
+    return {
+      entity_id: entityId,
+      domain: domainOf(entityId),
+      name: entityId,
+      state: '...',
+      unit: '',
+      deviceClass: '',
+      stateClass: '',
+      precision: undefined
+    };
+  }
+
+  function buildTile(item) {
+    return isSensorEntity(item) ? buildSensorTile(item) : buildToggleTile(item);
+  }
+
+  function buildToggleTile(item) {
+    var tile = div('tile');
+    var badge = div('badge');
+    badge.textContent = item.domain.toUpperCase();
+    var name = div('name');
+    name.textContent = item.name;
+    var value = div('value');
+    value.textContent = valueFor(item);
+
+    tile.appendChild(badge);
+    tile.appendChild(name);
+    tile.appendChild(value);
+
+    return { tile: tile, badge: badge, name: name, value: value };
+  }
+
+  function buildSensorTile(item) {
+    var tile = div('tile sensor-tile');
+
+    var head = div('sensor-head');
+    var icon = div('icon');
+    icon.innerHTML = iconSvg(item);
+    var badge = div('badge');
+    badge.textContent = item.domain === 'binary_sensor' ? 'BINARY SENSOR' : 'SENSOR';
+    head.appendChild(icon);
+    head.appendChild(badge);
+
+    var name = div('name');
+    name.textContent = item.name;
+
+    var readout = div('sensor-readout');
+    var value = span('value');
+    value.textContent = valueFor(item);
+    var unit = span('unit');
+    unit.textContent = unitFor(item);
+    readout.appendChild(value);
+    readout.appendChild(unit);
+
+    tile.appendChild(head);
+    tile.appendChild(name);
+    tile.appendChild(readout);
+
+    var canvas = null;
+    if (item.domain === 'sensor') {
+      canvas = document.createElement('canvas');
+      canvas.className = 'spark';
+      canvas.width = 480;
+      canvas.height = 96;
+      tile.appendChild(canvas);
+    }
+
+    return {
+      tile: tile,
+      icon: icon,
+      badge: badge,
+      name: name,
+      value: value,
+      unit: unit,
+      canvas: canvas
+    };
+  }
+
+  function buildGrid() {
+    el.grid.innerHTML = '';
+    dash.items = [];
+    dash.els = [];
+    dash.focus = 0;
+
+    if (!config.entities.length) {
+      el.empty.classList.remove('hidden');
+      return;
+    }
+    el.empty.classList.add('hidden');
+
+    var fragment = document.createDocumentFragment();
+    var i;
+    for (i = 0; i < config.entities.length; i++) {
+      var item = modelFor(config.entities[i]);
+      var refs = buildTile(item);
+      fragment.appendChild(refs.tile);
+      dash.items.push(item);
+      dash.els.push(refs);
+    }
+    el.grid.appendChild(fragment);
+
+    var rows = Math.ceil(config.entities.length / COLS);
+    if (rows > MAX_ROWS_BEFORE_SCROLL) {
+      el.grid.className = 'scroll';
+    } else {
+      el.grid.className = 'centered';
+      el.grid.scrollTop = 0;
+    }
+
+    applyTileClasses();
+  }
+
+  function applyTileClasses() {
+    var i;
+    for (i = 0; i < dash.els.length; i++) {
+      var item = dash.items[i];
+      var refs = dash.els[i];
+      if (!item || !refs) {
+        continue;
+      }
+      var cls;
+      if (isSensorEntity(item)) {
+        cls = 'tile sensor-tile';
+        if (item.domain === 'binary_sensor' && item.state === 'on') {
+          cls += ' alert';
+        }
+      } else {
+        cls = 'tile';
+        if (item.state === 'on') {
+          cls += ' on';
+        }
+      }
+      if (i === dash.focus) {
+        cls += ' focused';
+      }
+      if (i === pressed) {
+        cls += ' pressed';
+      }
+      refs.tile.className = cls;
+    }
+  }
+
+  function updateTile(index) {
+    var item = dash.items[index];
+    var refs = dash.els[index];
+    if (!item || !refs) {
+      return;
+    }
+
+    if (isSensorEntity(item)) {
+      refs.icon.innerHTML = iconSvg(item);
+      refs.name.textContent = item.name;
+      refs.value.textContent = valueFor(item);
+      refs.unit.textContent = unitFor(item);
+    } else {
+      refs.badge.textContent = item.domain.toUpperCase();
+      refs.name.textContent = item.name;
+      refs.value.textContent = valueFor(item);
+    }
+    applyTileClasses();
+  }
+
+  function ensureVisible(index) {
+    if (el.grid.className.indexOf('scroll') === -1) {
+      return;
+    }
+    var refs = dash.els[index];
+    if (!refs) {
+      return;
+    }
+    var top = refs.tile.offsetTop;
+    var bottom = top + refs.tile.offsetHeight;
+    if (top < el.grid.scrollTop) {
+      el.grid.scrollTop = top;
+    } else if (bottom > el.grid.scrollTop + el.grid.clientHeight) {
+      el.grid.scrollTop = bottom - el.grid.clientHeight;
+    }
+  }
+
+  function moveDash(delta, vertical) {
+    var count = dash.items.length;
+    if (!count) {
+      return;
+    }
+    var next = dash.focus + delta;
+    if (vertical) {
+      if (next < 0 || next >= count) {
+        return;
+      }
+    } else {
+      if (next < 0) {
+        next = count - 1;
+      }
+      if (next >= count) {
+        next = 0;
+      }
+    }
+    dash.focus = next;
+    applyTileClasses();
+    ensureVisible(next);
+  }
+
+  function toggleDashboard() {
+    var item = dash.items[dash.focus];
+    if (!item || !config.token || !isToggleEntity(item)) {
+      return;
+    }
+
+    var index = dash.focus;
+    var prev = item.state;
+    item.state = prev === 'on' ? 'off' : 'on';
+    pressed = index;
+    updateTile(index);
+    window.setTimeout(function () {
+      if (pressed === index) {
+        pressed = -1;
+        applyTileClasses();
+      }
+    }, 180);
+
+    var myGen = gen;
+
+    httpRequest({
+      method: 'POST',
+      path: '/api/services/homeassistant/toggle',
+      body: { entity_id: item.entity_id }
+    }, function (status) {
+      if (myGen !== gen) {
+        return;
+      }
+      if (status >= 200 && status < 300) {
+        markOnline();
+        window.setTimeout(function () {
+          if (myGen === gen) {
+            refreshOne(index);
+          }
+        }, 500);
+      } else {
+        item.state = prev;
+        updateTile(index);
+        if (status === 401) {
+          markAuth();
+        } else {
+          markOffline();
+          showToast('Toggle failed \u2014 check connection', 'warn', 4000);
+        }
+      }
+    });
+  }
+
+  function applyModel(data, index) {
+    var model = modelFromState(data);
+    entityCache[model.entity_id] = model;
+    dash.items[index] = model;
+    updateTile(index);
+  }
+
+  function refreshOne(index) {
+    var item = dash.items[index];
+    if (!item) {
+      return;
+    }
+    var myGen = gen;
+    httpRequest({ method: 'GET', path: '/api/states/' + encodeURIComponent(item.entity_id) }, function (status, text) {
+      if (myGen !== gen) {
+        return;
+      }
+      if (status === 200) {
+        var data = parseJson(text);
+        if (data && data.entity_id) {
+          applyModel(data, index);
+          markOnline();
+          return;
+        }
+      }
+      if (status === 401) {
+        markAuth();
+      } else {
+        markOffline();
+      }
+    });
+  }
+
+  function refreshAll() {
+    if (!config.token || !config.entities.length) {
+      return;
+    }
+
+    var myGen = gen;
+    var remaining = config.entities.length;
+    var successes = 0;
+    var auth = false;
+    var network = false;
+
+    var i;
+    for (i = 0; i < config.entities.length; i++) {
+      (function (index) {
+        httpRequest({
+          method: 'GET',
+          path: '/api/states/' + encodeURIComponent(config.entities[index])
+        }, function (status, text) {
+          if (myGen !== gen) {
+            return;
+          }
+          remaining--;
+          if (status === 200) {
+            var data = parseJson(text);
+            if (data && data.entity_id) {
+              applyModel(data, index);
+              successes++;
+            }
+          } else if (status === 401) {
+            auth = true;
+          } else {
+            network = true;
+          }
+          if (remaining === 0) {
+            if (auth) {
+              markAuth();
+            } else if (successes > 0) {
+              markOnline();
+            } else if (network) {
+              markOffline();
+            }
+          }
+        });
+      })(i);
+    }
+  }
+
+  /* --------------------------------------------------------- history */
+
+  function parseHistory(data, entityId) {
+    var points = [];
+    if (!data || !data.length) {
+      return points;
+    }
+
+    var records = Array.isArray(data[0]) ? data[0] : data;
+    if (!records) {
+      return points;
+    }
+
+    var i;
+    for (i = 0; i < records.length; i++) {
+      var record = records[i];
+      if (!record) {
+        continue;
+      }
+      if (record.entity_id && record.entity_id !== entityId) {
+        continue;
+      }
+      var value = parseFloat(record.state);
+      var time = Date.parse(record.last_changed || record.last_updated || '');
+      if (!isNaN(value) && !isNaN(time)) {
+        points.push({ t: time, v: value });
+      }
+    }
+    return points;
+  }
+
+  function formatChartValue(value) {
+    if (Math.abs(value) >= 1000) {
+      return String(Math.round(value));
+    }
+    var rounded = Math.round(value * 10) / 10;
+    return String(rounded);
+  }
+
+  function drawHistory(canvas, points) {
+    if (!canvas) {
+      return;
+    }
+    var ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return;
+    }
+    var w = canvas.width;
+    var h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, h - 1);
+    ctx.lineTo(w, h - 1);
+    ctx.stroke();
+
+    if (!points || points.length < 2) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.font = '18px sans-serif';
+      ctx.fillText('no history', 8, h / 2 + 6);
+      return;
+    }
+
+    var min = points[0].v;
+    var max = points[0].v;
+    var i;
+    for (i = 1; i < points.length; i++) {
+      if (points[i].v < min) {
+        min = points[i].v;
+      }
+      if (points[i].v > max) {
+        max = points[i].v;
+      }
+    }
+
+    var range = max - min;
+    if (range === 0) {
+      range = 1;
+    }
+    var t0 = points[0].t;
+    var t1 = points[points.length - 1].t;
+    var trange = t1 - t0;
+    if (trange === 0) {
+      trange = 1;
+    }
+    var pad = 6;
+
+    function x(point) {
+      return pad + ((point.t - t0) / trange) * (w - 2 * pad);
+    }
+    function y(point) {
+      return (h - 8) - ((point.v - min) / range) * (h - 16);
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(x(points[0]), h - 1);
+    for (i = 0; i < points.length; i++) {
+      ctx.lineTo(x(points[i]), y(points[i]));
+    }
+    ctx.lineTo(x(points[points.length - 1]), h - 1);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(41, 214, 255, 0.10)';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(x(points[0]), y(points[0]));
+    for (i = 1; i < points.length; i++) {
+      ctx.lineTo(x(points[i]), y(points[i]));
+    }
+    ctx.strokeStyle = '#29d6ff';
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.font = '18px sans-serif';
+    ctx.fillText(formatChartValue(max), 6, 18);
+    ctx.fillText(formatChartValue(min), 6, h - 8);
+  }
+
+  function fetchHistory(index) {
+    var item = dash.items[index];
+    var refs = dash.els[index];
+    if (!item || !refs || item.domain !== 'sensor' || !refs.canvas) {
+      return;
+    }
+
+    var start = new Date(Date.now() - HISTORY_HOURS * 3600 * 1000).toISOString();
+    var path = '/api/history/period/' + encodeURIComponent(start) +
+      '?filter_entity_id=' + encodeURIComponent(item.entity_id) + '&minimal_response';
+
+    var myGen = gen;
+    httpRequest({ method: 'GET', path: path }, function (status, text) {
+      if (myGen !== gen) {
+        return;
+      }
+      if (status !== 200) {
+        return;
+      }
+      drawHistory(refs.canvas, parseHistory(parseJson(text), item.entity_id));
+    });
+  }
+
+  function refreshHistoryAll() {
+    if (!config.token) {
+      return;
+    }
+    var i;
+    for (i = 0; i < dash.items.length; i++) {
+      if (dash.items[i] && dash.items[i].domain === 'sensor') {
+        fetchHistory(i);
+      }
+    }
+  }
+
+  function scheduleHistoryRefresh() {
+    if (historyDebounce) {
+      window.clearTimeout(historyDebounce);
+    }
+    historyDebounce = window.setTimeout(function () {
+      historyDebounce = null;
+      refreshHistoryAll();
+    }, 3000);
+  }
+
+  /* --------------------------------------------------------- websocket */
+
+  function wsUrl() {
+    var base = config.url || window.location.origin;
+    if (/^https:/i.test(base)) {
+      return base.replace(/^https:/i, 'wss:') + '/api/websocket';
+    }
+    if (/^http:/i.test(base)) {
+      return base.replace(/^http:/i, 'ws:') + '/api/websocket';
+    }
+    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return protocol + '//' + window.location.host + '/api/websocket';
+  }
+
+  function connectWs() {
+    if (!config.token) {
+      return;
+    }
+
+    var myGen = gen;
+    var socket;
+    try {
+      socket = new WebSocket(wsUrl());
+    } catch (e) {
+      scheduleWsRetry(myGen);
+      return;
+    }
+
+    ws = socket;
+    wsOpen = false;
+    wsAuthFailed = false;
+
+    socket.onmessage = function (event) {
+      if (myGen !== gen || socket !== ws) {
+        return;
+      }
+      var msg = parseJson(event.data);
+      if (!msg || !msg.type) {
+        return;
+      }
+      if (msg.type === 'auth_required') {
+        socket.send(JSON.stringify({ type: 'auth', access_token: config.token }));
+      } else if (msg.type === 'auth_ok') {
+        wsOpen = true;
+        markWsUp();
+        markOnline();
+        socket.send(JSON.stringify({ id: 1, type: 'subscribe_events', event_type: 'state_changed' }));
+      } else if (msg.type === 'auth_invalid') {
+        wsOpen = false;
+        wsAuthFailed = true;
+        markAuth();
+        try {
+          socket.close();
+        } catch (e2) {
+          /* ignore */
+        }
+      } else if (msg.type === 'event' && msg.event) {
+        handleWsEvent(msg.event);
+      }
+    };
+
+    socket.onclose = function () {
+      if (socket !== ws) {
+        return;
+      }
+      ws = null;
+      wsOpen = false;
+      if (myGen !== gen || wsAuthFailed) {
+        return;
+      }
+      markWsDown();
+      scheduleWsRetry(myGen);
+    };
+
+    socket.onerror = function () {
+      wsOpen = false;
+    };
+  }
+
+  function scheduleWsRetry(myGen) {
+    if (wsRetryTimer) {
+      return;
+    }
+    wsRetryTimer = window.setTimeout(function () {
+      wsRetryTimer = null;
+      if (myGen === gen) {
+        connectWs();
+      }
+    }, WS_RETRY_MS);
+  }
+
+  function handleWsEvent(event) {
+    var data = event.data || {};
+    var newState = data.new_state;
+    if (!newState || !newState.entity_id) {
+      return;
+    }
+    wsPending[newState.entity_id] = newState;
+    if (!wsFrame) {
+      var frameGen = gen;
+      wsFrame = raf(function () {
+        flushWsEvents(frameGen);
+      });
+    }
+  }
+
+  function flushWsEvents(frameGen) {
+    wsFrame = null;
+    if (frameGen !== gen) {
+      wsPending = {};
+      return;
+    }
+
+    var touchedSensor = false;
+    var id;
+    for (id in wsPending) {
+      if (!wsPending.hasOwnProperty(id)) {
+        continue;
+      }
+      var index = -1;
+      var i;
+      for (i = 0; i < dash.items.length; i++) {
+        if (dash.items[i] && dash.items[i].entity_id === id) {
+          index = i;
+          break;
+        }
+      }
+      if (index === -1) {
+        continue;
+      }
+      var model = modelFromState(wsPending[id]);
+      entityCache[model.entity_id] = model;
+      dash.items[index] = model;
+      updateTile(index);
+      if (model.domain === 'sensor') {
+        touchedSensor = true;
+      }
+    }
+
+    wsPending = {};
+    markOnline();
+    if (touchedSensor) {
+      scheduleHistoryRefresh();
+    }
+  }
+
+  /* -------------------------------------------------------- lifecycle */
+
+  function stopLive() {
+    gen++;
+
+    if (pollTimer) {
+      window.clearInterval(pollTimer);
+      pollTimer = null;
+    }
+    if (historyTimer) {
+      window.clearInterval(historyTimer);
+      historyTimer = null;
+    }
+    if (historyDebounce) {
+      window.clearTimeout(historyDebounce);
+      historyDebounce = null;
+    }
+    if (wsRetryTimer) {
+      window.clearTimeout(wsRetryTimer);
+      wsRetryTimer = null;
+    }
+
+    wsOpen = false;
+    wsAuthFailed = false;
+    wsPending = {};
+    wsFrame = null;
+    if (ws) {
+      var socket = ws;
+      ws = null;
+      try {
+        socket.close();
+      } catch (e) {
+        /* ignore */
+      }
+    }
+  }
+
+  function applyDashboard() {
+    stopLive();
+    resetHealth();
+    pressed = -1;
+    buildGrid();
+
+    if (config.token && config.entities.length) {
+      setStatus('loading', 'LOADING');
+      refreshAll();
+      refreshHistoryAll();
+      connectWs();
+      pollTimer = window.setInterval(function () {
+        if (!wsOpen) {
+          refreshAll();
+        }
+      }, POLL_MS);
+      historyTimer = window.setInterval(refreshHistoryAll, HISTORY_REFRESH_MS);
+    }
+  }
+
+  /* ---------------------------------------------------------- settings */
+
+  function collectConnFields() {
+    connFields = [];
+    var nodes = el.connectionView.querySelectorAll('.focusable');
+    var i;
+    for (i = 0; i < nodes.length; i++) {
+      connFields.push(nodes[i]);
+    }
+  }
+
+  function tokenMask(token) {
+    if (!token) {
+      return '(not set)';
+    }
+    var dots = '';
+    var i;
+    for (i = 0; i < 8; i++) {
+      dots += '\u2022';
+    }
+    return dots + ' (' + token.length + ' chars)';
+  }
+
+  function highlightConnFocus() {
+    var i;
+    for (i = 0; i < connFields.length; i++) {
+      if (i === settings.focus) {
+        connFields[i].classList.add('focused');
+      } else {
+        connFields[i].classList.remove('focused');
+      }
+    }
+  }
+
+  function renderConnection() {
+    el.valueUrl.textContent = settings.pending.url || '(default)';
+    el.valueToken.textContent = tokenMask(settings.pending.token);
+    highlightConnFocus();
+  }
+
+  function showError(node, text) {
+    node.textContent = text;
+    node.classList.remove('hidden');
+  }
+
+  function hideError(node) {
+    node.textContent = '';
+    node.classList.add('hidden');
+  }
+
+  function openSettings() {
+    if (addonMode) {
+      showToast('Configured in the Home Assistant add-on', 'warn', 4000);
+      return;
+    }
+    settings.open = true;
+    hideToast();
+    settings.view = 'connection';
+    settings.focus = 0;
+    settings.connecting = false;
+    settings.session++;
+    settings.pending = {
+      url: config.url || window.location.origin,
+      token: config.token || ''
+    };
+    el.connectionView.classList.remove('hidden');
+    el.entityView.classList.add('hidden');
+    hideError(el.settingsError);
+    hideError(el.entityError);
+    renderConnection();
+    el.settings.classList.remove('hidden');
+  }
+
+  function closeSettings() {
+    settings.open = false;
+    settings.session++;
+    if (keyboard.isOpen()) {
+      keyboard.close();
+    }
+    el.settings.classList.add('hidden');
+    applyTileClasses();
+  }
+
+  function openKeyboard(label, value, onDone) {
+    keyboard.open(label, value, function (result) {
+      onDone(result);
+    }, function () {
+      /* cancelled: keep the previous value */
+    });
+  }
+
+  function activateConnField() {
+    var field = connFields[settings.focus];
+    if (!field) {
+      return;
+    }
+    var action = field.getAttribute('data-action');
+
+    if (action === 'edit-url') {
+      openKeyboard('Server URL', settings.pending.url || window.location.origin, function (value) {
+        settings.pending.url = normalizeBase(value) || window.location.origin;
+        renderConnection();
+      });
+    } else if (action === 'edit-token') {
+      openKeyboard('Access token', settings.pending.token || '', function (value) {
+        settings.pending.token = value.replace(/\s+/g, '');
+        renderConnection();
+      });
+    } else if (action === 'connect') {
+      connectAndLoad();
+    } else if (action === 'cancel') {
+      closeSettings();
+    }
+  }
+
+  function connectAndLoad() {
+    if (settings.connecting) {
+      return;
+    }
+
+    var url = normalizeBase(settings.pending.url || window.location.origin) || window.location.origin;
+    var token = (settings.pending.token || '').replace(/\s+/g, '');
+
+    if (!token) {
+      showError(el.settingsError, 'Enter a long-lived access token.');
+      settings.focus = 1;
+      highlightConnFocus();
+      return;
+    }
+
+    settings.pending.url = url;
+    settings.pending.token = token;
+    settings.connecting = true;
+    el.connectBtn.textContent = 'Connecting...';
+    hideError(el.settingsError);
+
+    var session = settings.session;
+
+    httpRequest({ method: 'GET', path: '/api/states', base: url, token: token }, function (status, text) {
+      if (session !== settings.session) {
+        return;
+      }
+      settings.connecting = false;
+      el.connectBtn.textContent = 'Connect & choose tiles';
+
+      if (status === 200) {
+        var data = parseJson(text);
+        if (data && data.length !== undefined) {
+          openPicker(data);
+          return;
+        }
+      }
+
+      if (status === 401) {
+        showError(el.settingsError, 'Invalid access token.');
+      } else if (status === 0) {
+        showError(el.settingsError, 'Cannot reach Home Assistant at ' + url + '.');
+      } else {
+        showError(el.settingsError, 'Home Assistant returned HTTP ' + status + '.');
+      }
+      highlightConnFocus();
+    });
+  }
+
+  /* ------------------------------------------------------- entity picker */
+
+  function sortByName(list) {
+    list.sort(function (a, b) {
+      var x = a.name.toLowerCase();
+      var y = b.name.toLowerCase();
+      if (x < y) {
+        return -1;
+      }
+      if (x > y) {
+        return 1;
+      }
+      return 0;
+    });
+  }
+
+  function setPickerItems() {
+    picker.items = picker.tab === 'toggles' ? picker.toggleItems : picker.sensorItems;
+  }
+
+  function pickerHas(entityId) {
+    var i;
+    for (i = 0; i < picker.toggleItems.length; i++) {
+      if (picker.toggleItems[i].entity_id === entityId) {
+        return true;
+      }
+    }
+    for (i = 0; i < picker.sensorItems.length; i++) {
+      if (picker.sensorItems[i].entity_id === entityId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function openPicker(states) {
+    picker.toggleItems = [];
+    picker.sensorItems = [];
+    picker.selected = {};
+    picker.focus = 0;
+
+    var i;
+    for (i = 0; i < states.length; i++) {
+      var id = states[i].entity_id || '';
+      var domain = domainOf(id);
+      var isToggle = TOGGLE_DOMAINS.indexOf(domain) !== -1;
+      var isSensor = SENSOR_DOMAINS.indexOf(domain) !== -1;
+      if (!isToggle && !isSensor) {
+        continue;
+      }
+      var model = modelFromState(states[i]);
+      entityCache[id] = model;
+      if (isToggle) {
+        picker.toggleItems.push(model);
+      } else {
+        picker.sensorItems.push(model);
+      }
+    }
+
+    sortByName(picker.toggleItems);
+    sortByName(picker.sensorItems);
+
+    if (!picker.toggleItems.length && !picker.sensorItems.length) {
+      showError(el.settingsError, 'No switches or sensors found.');
+      return;
+    }
+
+    picker.tab = picker.toggleItems.length ? 'toggles' : 'sensors';
+    setPickerItems();
+
+    for (i = 0; i < config.entities.length; i++) {
+      if (pickerHas(config.entities[i])) {
+        picker.selected[config.entities[i]] = true;
+      }
+    }
+
+    settings.view = 'entities';
+    hideError(el.entityError);
+    el.connectionView.classList.add('hidden');
+    el.entityView.classList.remove('hidden');
+    renderPickerTabs();
+    renderPicker();
+    updatePickerHint();
+  }
+
+  function backToConnection() {
+    settings.view = 'connection';
+    el.entityView.classList.add('hidden');
+    el.connectionView.classList.remove('hidden');
+    renderConnection();
+  }
+
+  function renderPickerTabs() {
+    el.tabToggles.textContent = 'Toggles (' + picker.toggleItems.length + ')';
+    el.tabSensors.textContent = 'Sensors (' + picker.sensorItems.length + ')';
+    if (picker.tab === 'toggles') {
+      el.tabToggles.className = 'ptab active';
+      el.tabSensors.className = 'ptab';
+    } else {
+      el.tabToggles.className = 'ptab';
+      el.tabSensors.className = 'ptab active';
+    }
+  }
+
+  function switchPickerTab() {
+    var next = picker.tab === 'toggles' ? 'sensors' : 'toggles';
+    var list = next === 'toggles' ? picker.toggleItems : picker.sensorItems;
+    if (!list.length) {
+      return;
+    }
+    picker.tab = next;
+    setPickerItems();
+    picker.focus = 0;
+    renderPickerTabs();
+    renderPicker();
+    updatePickerHint();
+  }
+
+  function renderPicker() {
+    el.entityList.innerHTML = '';
+    picker.rowEls = [];
+    el.entityList.scrollTop = 0;
+
+    var i;
+    for (i = 0; i < picker.items.length; i++) {
+      var item = picker.items[i];
+      var row = div('entity-row');
+
+      var chk = span('chk');
+
+      var name = span('row-name');
+      name.textContent = item.name;
+
+      var meta = span('row-meta');
+      meta.textContent = item.domain + ' \u00b7 ' + valueFor(item) +
+        (unitFor(item) ? ' ' + unitFor(item) : '');
+
+      row.appendChild(chk);
+      row.appendChild(name);
+      row.appendChild(meta);
+      el.entityList.appendChild(row);
+      picker.rowEls.push({ row: row, chk: chk });
+    }
+
+    highlightPickerFocus();
+  }
+
+  function selectedCount() {
+    var count = 0;
+    var id;
+    for (id in picker.selected) {
+      if (picker.selected.hasOwnProperty(id) && picker.selected[id]) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  function updatePickerHint() {
+    el.entityHint.textContent = 'Choose tiles with OK \u00b7 ' + selectedCount() + ' of ' + MAX_TILES + ' selected';
+  }
+
+  function highlightPickerFocus() {
+    var i;
+    for (i = 0; i < picker.rowEls.length; i++) {
+      if (i === picker.focus) {
+        picker.rowEls[i].row.className = 'entity-row focused';
+      } else {
+        picker.rowEls[i].row.className = 'entity-row';
+      }
+      if (picker.selected[picker.items[i].entity_id]) {
+        picker.rowEls[i].chk.className = 'chk on';
+      } else {
+        picker.rowEls[i].chk.className = 'chk';
+      }
+    }
+
+    if (picker.focus === picker.items.length) {
+      el.saveEntities.className = 'btn primary focused';
+    } else {
+      el.saveEntities.className = 'btn primary';
+    }
+
+    ensurePickerVisible();
+  }
+
+  function ensurePickerVisible() {
+    var container = el.entityList;
+    if (picker.focus >= picker.rowEls.length) {
+      container.scrollTop = container.scrollHeight;
+      return;
+    }
+    var row = picker.rowEls[picker.focus].row;
+    var top = row.offsetTop;
+    var bottom = top + row.offsetHeight;
+    if (top < container.scrollTop) {
+      container.scrollTop = top;
+    } else if (bottom > container.scrollTop + container.clientHeight) {
+      container.scrollTop = bottom - container.clientHeight;
+    }
+  }
+
+  function movePicker(delta) {
+    var max = picker.items.length;
+    var next = picker.focus + delta;
+    if (next < 0) {
+      next = max;
+    }
+    if (next > max) {
+      next = 0;
+    }
+    picker.focus = next;
+    highlightPickerFocus();
+  }
+
+  function activatePicker() {
+    if (picker.focus < picker.items.length) {
+      var id = picker.items[picker.focus].entity_id;
+      var on = !!picker.selected[id];
+      if (!on && selectedCount() >= MAX_TILES) {
+        showError(el.entityError, 'Up to ' + MAX_TILES + ' tiles.');
+        return;
+      }
+      if (on) {
+        delete picker.selected[id];
+      } else {
+        picker.selected[id] = true;
+      }
+      hideError(el.entityError);
+      highlightPickerFocus();
+      updatePickerHint();
+      return;
+    }
+    savePicker();
+  }
+
+  function savePicker() {
+    var ids = [];
+    var i;
+    for (i = 0; i < picker.toggleItems.length; i++) {
+      if (picker.selected[picker.toggleItems[i].entity_id]) {
+        ids.push(picker.toggleItems[i].entity_id);
+      }
+    }
+    for (i = 0; i < picker.sensorItems.length; i++) {
+      if (picker.selected[picker.sensorItems[i].entity_id]) {
+        ids.push(picker.sensorItems[i].entity_id);
+      }
+    }
+
+    if (!ids.length) {
+      showError(el.entityError, 'Select at least one tile.');
+      return;
+    }
+
+    config.url = settings.pending.url || window.location.origin;
+    config.token = settings.pending.token;
+    config.entities = ids;
+    saveConfig();
+    closeSettings();
+    applyDashboard();
+  }
+
+  function handleSettingsKey(event) {
+    var code = event.keyCode;
+    var handled = true;
+
+    if (settings.connecting) {
+      if (code === KEYS.BLUE || code === KEYS.BACK || code === KEYS.ESC) {
+        closeSettings();
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    if (settings.view === 'entities') {
+      if (code === KEYS.UP) {
+        movePicker(-1);
+      } else if (code === KEYS.DOWN) {
+        movePicker(1);
+      } else if (code === KEYS.LEFT || code === KEYS.RIGHT) {
+        switchPickerTab();
+      } else if (code === KEYS.ENTER) {
+        activatePicker();
+      } else if (code === KEYS.BLUE || code === KEYS.BACK || code === KEYS.ESC) {
+        backToConnection();
+      } else {
+        handled = false;
+      }
+    } else {
+      if (code === KEYS.UP) {
+        settings.focus = (settings.focus - 1 + connFields.length) % connFields.length;
+        highlightConnFocus();
+      } else if (code === KEYS.DOWN) {
+        settings.focus = (settings.focus + 1) % connFields.length;
+        highlightConnFocus();
+      } else if (code === KEYS.ENTER) {
+        activateConnField();
+      } else if (code === KEYS.BLUE || code === KEYS.BACK || code === KEYS.ESC) {
+        closeSettings();
+      } else {
+        handled = false;
+      }
+    }
+
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  /* ---------------------------------------------------------- keyboard */
+
+  var LOWER_ROWS = [
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+    ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+    ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '@', '.'],
+    ['z', 'x', 'c', 'v', 'b', 'n', 'm', '-', '_', '/', ':'],
+    ['SHIFT', 'SYM', 'SPACE', 'CLR', 'DEL', 'DONE']
+  ];
+
+  var SYM_ROWS = [
+    ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')'],
+    ['-', '_', '=', '+', '[', ']', '{', '}', ';', ':'],
+    ['"', '\'', '`', '~', '|', '\\', '<', '>', ',', '.'],
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+    ['ABC', 'SPACE', 'CLR', 'DEL', 'DONE']
+  ];
+
+  function Keyboard() {
+    this.root = byId('keyboard');
+    this.labelEl = byId('kb-label');
+    this.valueEl = byId('kb-value');
+    this.gridEl = byId('kb-grid');
+    this.mode = 'lower';
+    this.value = '';
+    this.focusRow = 0;
+    this.focusCol = 0;
+    this.rows = [];
+    this.onDone = null;
+    this.onCancel = null;
+    this.build();
+  }
+
+  Keyboard.prototype.isOpen = function () {
+    return !this.root.classList.contains('hidden');
+  };
+
+  Keyboard.prototype.open = function (label, value, onDone, onCancel) {
+    this.labelEl.textContent = label;
+    this.value = value || '';
+    this.onDone = onDone || null;
+    this.onCancel = onCancel || null;
+    this.mode = 'lower';
+    this.focusRow = 0;
+    this.focusCol = 0;
+    this.build();
+    this.updateValue();
+    this.root.classList.remove('hidden');
+  };
+
+  Keyboard.prototype.close = function () {
+    this.root.classList.add('hidden');
+    this.onDone = null;
+    this.onCancel = null;
+  };
+
+  Keyboard.prototype.finish = function (commit) {
+    var callback = commit ? this.onDone : this.onCancel;
+    var value = this.value;
+    this.close();
+    if (typeof callback === 'function') {
+      callback(value);
+    }
+  };
+
+  Keyboard.prototype.keyLabel = function (code) {
+    if (code === 'SHIFT' || code === 'SYM' || code === 'ABC' || code === 'SPACE' || code === 'CLR' || code === 'DEL' || code === 'DONE') {
+      if (code === 'SYM') {
+        return '123';
+      }
+      return code;
+    }
+    if (this.mode === 'upper' && /^[a-z]$/.test(code)) {
+      return code.toUpperCase();
+    }
+    return code;
+  };
+
+  Keyboard.prototype.build = function () {
+    var layout = this.mode === 'sym' ? SYM_ROWS : LOWER_ROWS;
+    this.gridEl.innerHTML = '';
+    this.rows = [];
+
+    var rowIndex;
+    var colIndex;
+    for (rowIndex = 0; rowIndex < layout.length; rowIndex++) {
+      var rowElement = div('kb-row');
+      var rowItems = [];
+      for (colIndex = 0; colIndex < layout[rowIndex].length; colIndex++) {
+        var code = layout[rowIndex][colIndex];
+        var keyElement = div('kb-key' + (code.length > 1 ? ' wide' : ''));
+        keyElement.textContent = this.keyLabel(code);
+        keyElement.setAttribute('data-code', code);
+        rowElement.appendChild(keyElement);
+        rowItems.push({ element: keyElement, code: code });
+      }
+      this.gridEl.appendChild(rowElement);
+      this.rows.push(rowItems);
+    }
+
+    if (this.focusRow >= this.rows.length) {
+      this.focusRow = this.rows.length - 1;
+    }
+    if (this.focusCol >= this.rows[this.focusRow].length) {
+      this.focusCol = this.rows[this.focusRow].length - 1;
+    }
+    this.updateFocus();
+  };
+
+  Keyboard.prototype.updateValue = function () {
+    this.valueEl.textContent = this.value ? this.value : '(empty)';
+  };
+
+  Keyboard.prototype.updateFocus = function () {
+    var row;
+    var col;
+    for (row = 0; row < this.rows.length; row++) {
+      for (col = 0; col < this.rows[row].length; col++) {
+        if (row === this.focusRow && col === this.focusCol) {
+          this.rows[row][col].element.classList.add('focused');
+        } else {
+          this.rows[row][col].element.classList.remove('focused');
+        }
+      }
+    }
+  };
+
+  Keyboard.prototype.moveRow = function (delta) {
+    var row = this.focusRow + delta;
+    if (row < 0) {
+      row = this.rows.length - 1;
+    }
+    if (row >= this.rows.length) {
+      row = 0;
+    }
+    this.focusRow = row;
+    if (this.focusCol >= this.rows[row].length) {
+      this.focusCol = this.rows[row].length - 1;
+    }
+    this.updateFocus();
+  };
+
+  Keyboard.prototype.moveCol = function (delta) {
+    var length = this.rows[this.focusRow].length;
+    this.focusCol = (this.focusCol + delta + length) % length;
+    this.updateFocus();
+  };
+
+  Keyboard.prototype.activate = function () {
+    var row = this.rows[this.focusRow];
+    if (!row) {
+      return;
+    }
+    var item = row[this.focusCol];
+    if (!item) {
+      return;
+    }
+    var code = item.code;
+
+    if (code === 'SHIFT') {
+      this.mode = this.mode === 'upper' ? 'lower' : 'upper';
+      this.build();
+      return;
+    }
+    if (code === 'SYM') {
+      this.mode = 'sym';
+      this.build();
+      return;
+    }
+    if (code === 'ABC') {
+      this.mode = 'lower';
+      this.build();
+      return;
+    }
+    if (code === 'SPACE') {
+      this.value += ' ';
+    } else if (code === 'CLR') {
+      this.value = '';
+    } else if (code === 'DEL') {
+      this.value = this.value.slice(0, -1);
+    } else if (code === 'DONE') {
+      this.finish(true);
+      return;
+    } else {
+      this.value += this.mode === 'upper' ? code.toUpperCase() : code;
+    }
+    this.updateValue();
+  };
+
+  Keyboard.prototype.handleKey = function (event) {
+    var code = event.keyCode;
+    var handled = true;
+
+    if (code === KEYS.LEFT) {
+      this.moveCol(-1);
+    } else if (code === KEYS.RIGHT) {
+      this.moveCol(1);
+    } else if (code === KEYS.UP) {
+      this.moveRow(-1);
+    } else if (code === KEYS.DOWN) {
+      this.moveRow(1);
+    } else if (code === KEYS.ENTER) {
+      this.activate();
+    } else if (code === KEYS.BACK || code === KEYS.ESC || code === KEYS.BLUE) {
+      this.finish(false);
+    } else if (code === 8) {
+      this.value = this.value.slice(0, -1);
+      this.updateValue();
+    } else if (event.key && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      this.value += event.key;
+      this.updateValue();
+    } else {
+      handled = false;
+    }
+
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+
+  /* -------------------------------------------------------- key router */
+
+  function handleDashboardKey(event) {
+    var code = event.keyCode;
+    var handled = true;
+
+    if (code === KEYS.LEFT) {
+      moveDash(-1, false);
+    } else if (code === KEYS.RIGHT) {
+      moveDash(1, false);
+    } else if (code === KEYS.UP) {
+      moveDash(-COLS, true);
+    } else if (code === KEYS.DOWN) {
+      moveDash(COLS, true);
+    } else if (code === KEYS.ENTER) {
+      toggleDashboard();
+    } else if (code === KEYS.BLUE || code === 66 || code === 83) {
+      openSettings();
+    } else {
+      handled = false;
+    }
+
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  function onKeyDown(event) {
+    if (keyboard.isOpen()) {
+      keyboard.handleKey(event);
+      return;
+    }
+    if (settings.open) {
+      handleSettingsKey(event);
+      return;
+    }
+    handleDashboardKey(event);
+  }
+
+  /* ------------------------------------------------------------- boot */
+
+  function loadAddonConfig(callback) {
+    var called = false;
+
+    function finish(value) {
+      if (called) {
+        return;
+      }
+      called = true;
+      callback(value);
+    }
+
+    var xhr = new XMLHttpRequest();
+    try {
+      xhr.open('GET', 'config.json?ts=' + (new Date()).getTime(), true);
+    } catch (e) {
+      finish(null);
+      return;
+    }
+    xhr.timeout = 2500;
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) {
+        return;
+      }
+      if (xhr.status !== 200) {
+        finish(null);
+        return;
+      }
+      var data = parseJson(xhr.responseText || '');
+      if (!data || typeof data.token !== 'string' || !Array.isArray(data.entities)) {
+        finish(null);
+        return;
+      }
+      finish(data);
+    };
+    xhr.onerror = function () { finish(null); };
+    xhr.ontimeout = function () { finish(null); };
+    try {
+      xhr.send(null);
+    } catch (e2) {
+      finish(null);
+    }
+  }
+
+  function startLocalMode() {
+    config = loadConfig();
+    seedFromHash();
+    applyDashboard();
+
+    if (!config.token) {
+      setStatus('noconfig', 'NO TOKEN');
+      openSettings();
+    } else if (!config.entities.length) {
+      setStatus('noconfig', 'SETUP');
+      openSettings();
+    }
+  }
+
+  function startAddonMode(addonConfig) {
+    addonMode = true;
+
+    var entities = [];
+    var i;
+    for (i = 0; i < addonConfig.entities.length; i++) {
+      if (typeof addonConfig.entities[i] === 'string') {
+        entities.push(addonConfig.entities[i]);
+      }
+    }
+
+    config = {
+      url: window.location.origin,
+      token: typeof addonConfig.token === 'string' ? addonConfig.token : '',
+      entities: entities
+    };
+
+    if (addonConfig.title) {
+      document.title = String(addonConfig.title);
+    }
+    if (addonConfig.chart_hours) {
+      var hours = parseInt(addonConfig.chart_hours, 10);
+      if (!isNaN(hours) && hours > 0) {
+        HISTORY_HOURS = hours;
+      }
+    }
+    if (addonConfig.refresh_seconds) {
+      var seconds = parseInt(addonConfig.refresh_seconds, 10);
+      if (!isNaN(seconds) && seconds > 0) {
+        POLL_MS = seconds * 1000;
+      }
+    }
+    if (el.footer) {
+      el.footer.textContent = 'D-PAD Move \u00b7 OK Toggle';
+    }
+
+    if (!config.token) {
+      config.entities = [];
+      setStatus('noconfig', 'ADD-ON SETUP');
+      if (el.emptyTitle) {
+        el.emptyTitle.textContent = 'Configure the add-on';
+      }
+      if (el.emptyText) {
+        el.emptyText.textContent = 'Set the token and entities in the HA Lite add-on options in Home Assistant.';
+      }
+      applyDashboard();
+      return;
+    }
+
+    if (!config.entities.length) {
+      setStatus('noconfig', 'ADD-ON SETUP');
+      if (el.emptyTitle) {
+        el.emptyTitle.textContent = 'Configure the add-on';
+      }
+      if (el.emptyText) {
+        el.emptyText.textContent = 'Add entities in the HA Lite add-on options in Home Assistant.';
+      }
+      applyDashboard();
+      return;
+    }
+
+    applyDashboard();
+  }
+
+  function init() {
+    el.grid = byId('grid');
+    el.empty = byId('empty');
+    el.status = byId('status');
+    el.statusText = byId('status-text');
+    el.settings = byId('settings');
+    el.connectionView = byId('connection-view');
+    el.entityView = byId('entity-view');
+    el.valueUrl = byId('value-url');
+    el.valueToken = byId('value-token');
+    el.settingsError = byId('settings-error');
+    el.entityError = byId('entity-error');
+    el.connectBtn = byId('connect-btn');
+    el.entityHint = byId('entity-hint');
+    el.entityList = byId('entity-list');
+    el.saveEntities = byId('save-entities');
+    el.tabToggles = byId('tab-toggles');
+    el.tabSensors = byId('tab-sensors');
+    el.toast = byId('toast');
+    el.toastText = byId('toast-text');
+    el.footer = byId('footer');
+    el.emptyTitle = byId('empty-title');
+    el.emptyText = byId('empty-text');
+
+    keyboard = new Keyboard();
+    collectConnFields();
+    document.addEventListener('keydown', onKeyDown, false);
+
+    loadAddonConfig(function (addonConfig) {
+      if (addonConfig) {
+        startAddonMode(addonConfig);
+      } else {
+        startLocalMode();
+      }
+    });
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, false);
+  } else {
+    init();
+  }
+})(window, document);
+</script>
+</body>
+</html>

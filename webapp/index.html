@@ -663,8 +663,8 @@ body {
   <main id="main">
     <div id="grid" class="centered"></div>
     <div id="empty" class="hidden">
-      <div class="empty-title">No tiles yet</div>
-      <div class="empty-text">Press <b>BLUE</b> on the remote to configure Home Assistant.</div>
+      <div class="empty-title" id="empty-title">No tiles yet</div>
+      <div class="empty-text" id="empty-text">Press <b>BLUE</b> on the remote to configure Home Assistant.</div>
     </div>
   </main>
 
@@ -796,6 +796,7 @@ body {
 
   var pressed = -1;
   var toastTimer = null;
+  var addonMode = false;
   var health = { offline: false, auth: false, wsDown: false };
   var wsPending = {};
   var wsFrame = null;
@@ -2000,6 +2001,10 @@ body {
   }
 
   function openSettings() {
+    if (addonMode) {
+      showToast('Configured in the Home Assistant add-on', 'warn', 4000);
+      return;
+    }
     settings.open = true;
     hideToast();
     settings.view = 'connection';
@@ -2684,6 +2689,127 @@ body {
 
   /* ------------------------------------------------------------- boot */
 
+  function loadAddonConfig(callback) {
+    var called = false;
+
+    function finish(value) {
+      if (called) {
+        return;
+      }
+      called = true;
+      callback(value);
+    }
+
+    var xhr = new XMLHttpRequest();
+    try {
+      xhr.open('GET', 'config.json?ts=' + (new Date()).getTime(), true);
+    } catch (e) {
+      finish(null);
+      return;
+    }
+    xhr.timeout = 2500;
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) {
+        return;
+      }
+      if (xhr.status !== 200) {
+        finish(null);
+        return;
+      }
+      var data = parseJson(xhr.responseText || '');
+      if (!data || typeof data.token !== 'string' || !Array.isArray(data.entities)) {
+        finish(null);
+        return;
+      }
+      finish(data);
+    };
+    xhr.onerror = function () { finish(null); };
+    xhr.ontimeout = function () { finish(null); };
+    try {
+      xhr.send(null);
+    } catch (e2) {
+      finish(null);
+    }
+  }
+
+  function startLocalMode() {
+    config = loadConfig();
+    seedFromHash();
+    applyDashboard();
+
+    if (!config.token) {
+      setStatus('noconfig', 'NO TOKEN');
+      openSettings();
+    } else if (!config.entities.length) {
+      setStatus('noconfig', 'SETUP');
+      openSettings();
+    }
+  }
+
+  function startAddonMode(addonConfig) {
+    addonMode = true;
+
+    var entities = [];
+    var i;
+    for (i = 0; i < addonConfig.entities.length; i++) {
+      if (typeof addonConfig.entities[i] === 'string') {
+        entities.push(addonConfig.entities[i]);
+      }
+    }
+
+    config = {
+      url: window.location.origin,
+      token: typeof addonConfig.token === 'string' ? addonConfig.token : '',
+      entities: entities
+    };
+
+    if (addonConfig.title) {
+      document.title = String(addonConfig.title);
+    }
+    if (addonConfig.chart_hours) {
+      var hours = parseInt(addonConfig.chart_hours, 10);
+      if (!isNaN(hours) && hours > 0) {
+        HISTORY_HOURS = hours;
+      }
+    }
+    if (addonConfig.refresh_seconds) {
+      var seconds = parseInt(addonConfig.refresh_seconds, 10);
+      if (!isNaN(seconds) && seconds > 0) {
+        POLL_MS = seconds * 1000;
+      }
+    }
+    if (el.footer) {
+      el.footer.textContent = 'D-PAD Move \u00b7 OK Toggle';
+    }
+
+    if (!config.token) {
+      config.entities = [];
+      setStatus('noconfig', 'ADD-ON SETUP');
+      if (el.emptyTitle) {
+        el.emptyTitle.textContent = 'Configure the add-on';
+      }
+      if (el.emptyText) {
+        el.emptyText.textContent = 'Set the token and entities in the HA Lite add-on options in Home Assistant.';
+      }
+      applyDashboard();
+      return;
+    }
+
+    if (!config.entities.length) {
+      setStatus('noconfig', 'ADD-ON SETUP');
+      if (el.emptyTitle) {
+        el.emptyTitle.textContent = 'Configure the add-on';
+      }
+      if (el.emptyText) {
+        el.emptyText.textContent = 'Add entities in the HA Lite add-on options in Home Assistant.';
+      }
+      applyDashboard();
+      return;
+    }
+
+    applyDashboard();
+  }
+
   function init() {
     el.grid = byId('grid');
     el.empty = byId('empty');
@@ -2704,23 +2830,21 @@ body {
     el.tabSensors = byId('tab-sensors');
     el.toast = byId('toast');
     el.toastText = byId('toast-text');
+    el.footer = byId('footer');
+    el.emptyTitle = byId('empty-title');
+    el.emptyText = byId('empty-text');
 
     keyboard = new Keyboard();
     collectConnFields();
     document.addEventListener('keydown', onKeyDown, false);
 
-    config = loadConfig();
-    seedFromHash();
-
-    applyDashboard();
-
-    if (!config.token) {
-      setStatus('noconfig', 'NO TOKEN');
-      openSettings();
-    } else if (!config.entities.length) {
-      setStatus('noconfig', 'SETUP');
-      openSettings();
-    }
+    loadAddonConfig(function (addonConfig) {
+      if (addonConfig) {
+        startAddonMode(addonConfig);
+      } else {
+        startLocalMode();
+      }
+    });
   }
 
   if (document.readyState === 'loading') {
