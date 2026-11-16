@@ -7,11 +7,11 @@ is nothing to copy into `config/www` and no CORS configuration.
 ## Configuration
 
 The **token** is set in the add-on options (masked). Everything else is edited
-on the configuration page:
+on the configuration page, reachable three ways:
 
-```
-http://<your-ha-host>:8099/?config=1
-```
+- the **HA Lite** panel in Home Assistant's sidebar (add-on ingress), or
+- the add-on's **Open Web UI** button, or
+- `http://<your-ha-host>:8099/?config=1`
 
 There you can:
 
@@ -47,7 +47,7 @@ Install the HA Lite launcher (sideload) and point it at the add-on URL:
 
 ```sh
 LAUNCH_URL="http://<your-ha-host>:8099/" ./package.sh
-ares-install --device tv dist/com.halite.dashboard_0.6.1_all.ipk
+ares-install --device tv dist/com.halite.dashboard_0.6.2_all.ipk
 ares-launch --device tv com.halite.dashboard
 ```
 

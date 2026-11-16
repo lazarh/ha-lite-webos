@@ -2419,7 +2419,7 @@ body.theme-rose .config-input:focus {
 
   function openSettings() {
     if (addonMode) {
-      showToast('Configured in the Home Assistant add-on', 'warn', 4000);
+      showToast('Configure in the HA Lite add-on in Home Assistant', 'warn', 5000);
       return;
     }
     settings.open = true;
@@ -2847,6 +2847,10 @@ body.theme-rose .config-input:focus {
 
   function isConfigRequested() {
     return window.location.search.indexOf('config=1') !== -1 || window.location.hash === '#config';
+  }
+
+  function isIngress() {
+    return window.location.pathname.indexOf('/api/hassio_ingress/') !== -1;
   }
 
   function configSelectedCount() {
@@ -3535,7 +3539,7 @@ body.theme-rose .config-input:focus {
     }
 
     applyDashboard();
-    if (isConfigRequested()) {
+    if (isConfigRequested() || isIngress()) {
       openConfigUI();
     }
   }
