@@ -41,6 +41,10 @@ files under `/local/` are public).
   lost/recovered connections and failed toggles; persistent hint on token errors
 - Smooth focus (scale + glow) and a brief press state on OK; chart min/max labels
   and overscan-safe margins for 10-foot readability
+- Auto-fit tile sizing (1–6 large, 7–9 medium, 10–12 small) and four themes
+  (Amber, Blue, Emerald, Rose)
+- GREEN refreshes the TV immediately; the add-on also offers a searchable
+  browser configuration page with live entity validation
 - D-pad configuration: URL (defaults to the page origin), token via a custom
   on-screen keyboard, and a two-tab picker (Toggles / Sensors)
 - Up to 12 tiles; selection persists in `localStorage` across app restarts
@@ -60,7 +64,7 @@ files under `/local/` are public).
 ### Optional: seed the token from a URL
 
 ```
-http://<your-ha-host>:8123/local/halite/index.html?v=0.5.1#<long-lived-token>
+http://<your-ha-host>:8123/local/halite/index.html?v=0.6.0#<long-lived-token>
 ```
 
 The fragment is stored locally and stripped from the address bar.
@@ -105,19 +109,23 @@ Home Assistant API, so there is no `config/www` copying and no CORS setup.
 2. Find **HA Lite** in the store and install it (the add-on builds locally;
    no prebuilt image is needed).
 
-3. Open its **Configuration** tab and set:
-   - `token` — a long-lived access token,
-   - `entities` — the entity IDs to show on the TV, in order,
-   - optionally `title`, `chart_hours` (history window) and
-     `refresh_seconds` (polling fallback).
+3. Set the add-on **token** in its **Configuration** tab (it is the only option).
+4. **Start** the add-on, then open the configuration page in a browser:
 
-4. **Start** the add-on, then open `http://<your-ha-host>:8099/` to check it.
+   ```
+   http://<your-ha-host>:8099/?config=1
+   ```
 
-5. Point the TV launcher at the add-on:
+   Search and tick real entities, set a title, pick a theme
+   (Amber / Blue / Emerald / Rose) and a layout (auto-fit / large / small),
+   then save. The configuration is stored in `/data/ha-lite.json`.
+
+5. Open `http://<your-ha-host>:8099/` to check it, then point the TV launcher at
+   the add-on:
 
    ```sh
    LAUNCH_URL="http://<your-ha-host>:8099/" ./package.sh
-   ares-install --device tv dist/com.halite.dashboard_0.5.1_all.ipk
+   ares-install --device tv dist/com.halite.dashboard_0.6.0_all.ipk
    ares-launch --device tv com.halite.dashboard
    ```
 
@@ -172,17 +180,17 @@ The app must be served by Home Assistant itself, on the same origin as its API
 3. Build the launcher with **your** Home Assistant URL:
 
    ```sh
-   LAUNCH_URL="http://<your-ha-host>:8123/local/halite/index.html?v=0.5.1" ./package.sh
+   LAUNCH_URL="http://<your-ha-host>:8123/local/halite/index.html?v=0.6.0" ./package.sh
    ```
 
-   This produces `dist/com.halite.dashboard_0.5.1_all.ipk` using only `ar` and
+   This produces `dist/com.halite.dashboard_0.6.0_all.ipk` using only `ar` and
    `tar` (no LG SDK required). The URL is baked in at build time, so every
    installation builds its own IPK.
 
 4. Install and launch:
 
    ```sh
-   ares-install --device tv dist/com.halite.dashboard_0.5.1_all.ipk
+   ares-install --device tv dist/com.halite.dashboard_0.6.0_all.ipk
    ares-launch --device tv com.halite.dashboard
    ```
 
@@ -197,7 +205,7 @@ and save. The token is stored only on the TV. (With the add-on, tiles come from
 the add-on options and settings are disabled.)
 
 Optional: seed the token once via the URL fragment
-`.../index.html?v=0.5.1#<token>` instead of typing it; it is stored and then
+`.../index.html?v=0.6.0#<token>` instead of typing it; it is stored and then
 stripped from the address bar.
 
 ### Updating
