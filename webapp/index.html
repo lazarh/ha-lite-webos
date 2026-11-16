@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HA Lite</title>
 <style>
-/* HA Lite Phase 2 - remote-based configuration + multi-switch dashboard.
-   Target: LG webOS 3.x, Chromium 38. ES5 only, same-origin REST.
+/* HA Lite Phase 3 - WebSocket live updates, sensor tiles and 24h charts.
+   Target: LG webOS 3.x, Chromium 38. ES5 only, same-origin REST/WS.
    Deliberately avoids CSS grid, custom properties, flexbox gap and animations. */
 
 html {
@@ -204,6 +204,67 @@ body {
   word-break: break-word;
 }
 
+/* ------------------------------------------------------- sensor tiles */
+
+.sensor-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.icon {
+  width: 54px;
+  height: 54px;
+  color: #ffd400;
+}
+
+.icon svg {
+  display: block;
+  width: 54px;
+  height: 54px;
+}
+
+.sensor-tile .badge {
+  margin-left: 16px;
+  text-align: right;
+}
+
+.sensor-tile .name {
+  margin-top: 14px;
+  max-height: 64px;
+  font-size: 30px;
+}
+
+.sensor-readout {
+  margin-top: auto;
+  display: flex;
+  align-items: baseline;
+}
+
+.sensor-readout .value {
+  margin-top: 0;
+  font-size: 60px;
+  line-height: 1;
+  color: #31d7ff;
+}
+
+.sensor-readout .unit {
+  margin-left: 10px;
+  font-size: 28px;
+  color: #8a8a8a;
+}
+
+.sensor-tile.alert .sensor-readout .value {
+  color: #ff9f1a;
+}
+
+.spark {
+  display: block;
+  width: 100%;
+  height: 80px;
+  margin-top: 14px;
+}
+
 #empty {
   position: absolute;
   top: 0;
@@ -372,6 +433,29 @@ body {
 
 /* ------------------------------------------------------- entity picker */
 
+.picker-tabs {
+  display: flex;
+  margin-bottom: 14px;
+}
+
+.ptab {
+  margin-right: 14px;
+  padding: 9px 22px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #8a8a8a;
+  background: #101010;
+  border: 2px solid #2a2a2a;
+  border-radius: 10px;
+}
+
+.ptab.active {
+  color: #000000;
+  background: #ffd400;
+  border-color: #ffd400;
+}
+
 .entity-hint {
   margin-bottom: 14px;
   font-size: 22px;
@@ -381,7 +465,7 @@ body {
 
 .entity-list {
   position: relative;
-  max-height: 470px;
+  max-height: 440px;
   overflow-y: auto;
   border: 2px solid #2a2a2a;
   border-radius: 14px;
@@ -519,7 +603,7 @@ body {
   <main id="main">
     <div id="grid" class="centered"></div>
     <div id="empty" class="hidden">
-      <div class="empty-title">No switches yet</div>
+      <div class="empty-title">No tiles yet</div>
       <div class="empty-text">Press <b>BLUE</b> on the remote to configure Home Assistant.</div>
     </div>
   </main>
@@ -544,13 +628,17 @@ body {
         </div>
         <div class="form-error hidden" id="settings-error"></div>
         <div class="form-actions">
-          <div class="btn primary focusable" data-action="connect" id="connect-btn">Connect &amp; choose switches</div>
+          <div class="btn primary focusable" data-action="connect" id="connect-btn">Connect &amp; choose tiles</div>
           <div class="btn focusable" data-action="cancel">Cancel</div>
         </div>
       </div>
 
       <div id="entity-view" class="hidden">
-        <div class="entity-hint" id="entity-hint">Choose toggles with OK</div>
+        <div class="picker-tabs" id="picker-tabs">
+          <span class="ptab active" id="tab-toggles">Toggles</span>
+          <span class="ptab" id="tab-sensors">Sensors</span>
+        </div>
+        <div class="entity-hint" id="entity-hint">Choose tiles with OK</div>
         <div class="entity-list" id="entity-list"></div>
         <div class="form-error hidden" id="entity-error"></div>
         <div class="form-actions">
@@ -558,7 +646,7 @@ body {
         </div>
       </div>
     </div>
-    <div class="panel-footer" id="settings-footer">UP/DOWN move &nbsp;&middot;&nbsp; OK select &nbsp;&middot;&nbsp; BLUE close</div>
+    <div class="panel-footer">UP/DOWN move &nbsp;&middot;&nbsp; LEFT/RIGHT tabs &nbsp;&middot;&nbsp; OK select &nbsp;&middot;&nbsp; BLUE close</div>
   </div>
 </div>
 
@@ -581,8 +669,13 @@ body {
 
   var STORAGE_KEY = 'halite.config.v1';
   var LEGACY_TOKEN_KEY = 'halite.token';
-  var SELECTABLE_DOMAINS = ['switch', 'light', 'input_boolean'];
+  var TOGGLE_DOMAINS = ['switch', 'light', 'input_boolean'];
+  var SENSOR_DOMAINS = ['sensor', 'binary_sensor'];
+  var MAX_TILES = 12;
   var POLL_MS = 10000;
+  var HISTORY_HOURS = 24;
+  var HISTORY_REFRESH_MS = 300000;
+  var WS_RETRY_MS = 5000;
   var COLS = 3;
   var MAX_ROWS_BEFORE_SCROLL = 2;
 
@@ -605,6 +698,13 @@ body {
   var dash = { items: [], els: [], focus: 0 };
   var gen = 0;
   var pollTimer = null;
+  var historyTimer = null;
+  var historyDebounce = null;
+
+  var ws = null;
+  var wsOpen = false;
+  var wsAuthFailed = false;
+  var wsRetryTimer = null;
 
   var settings = {
     open: false,
@@ -615,7 +715,16 @@ body {
     session: 0
   };
 
-  var picker = { items: [], selected: {}, focus: 0, rowEls: [] };
+  var picker = {
+    tab: 'toggles',
+    toggleItems: [],
+    sensorItems: [],
+    items: [],
+    selected: {},
+    focus: 0,
+    rowEls: []
+  };
+
   var connFields = [];
   var keyboard = null;
 
@@ -623,6 +732,22 @@ body {
 
   function byId(id) {
     return document.getElementById(id);
+  }
+
+  function div(className) {
+    var node = document.createElement('div');
+    if (className) {
+      node.className = className;
+    }
+    return node;
+  }
+
+  function span(className) {
+    var node = document.createElement('span');
+    if (className) {
+      node.className = className;
+    }
+    return node;
   }
 
   function domainOf(entityId) {
@@ -642,24 +767,138 @@ body {
     }
   }
 
+  function isToggleEntity(item) {
+    return TOGGLE_DOMAINS.indexOf(item.domain) !== -1;
+  }
+
+  function isSensorEntity(item) {
+    return SENSOR_DOMAINS.indexOf(item.domain) !== -1;
+  }
+
   function modelFromState(data) {
     var attrs = data.attributes || {};
     return {
       entity_id: data.entity_id,
       domain: domainOf(data.entity_id),
       name: attrs.friendly_name || data.entity_id,
-      state: data.state
+      state: data.state,
+      unit: attrs.unit_of_measurement || '',
+      deviceClass: attrs.device_class || '',
+      stateClass: attrs.state_class || ''
     };
   }
 
-  function valueFor(state) {
-    if (state === 'on') {
+  function valueFor(item) {
+    if (isSensorEntity(item)) {
+      if (item.domain === 'binary_sensor') {
+        return binaryLabel(item);
+      }
+      var s = item.state;
+      if (s === undefined || s === null || s === '') {
+        return '...';
+      }
+      if (s === 'unknown' || s === 'unavailable') {
+        return String(s).toUpperCase();
+      }
+      return s;
+    }
+    if (item.state === 'on') {
       return 'ON';
     }
-    if (state === 'off') {
+    if (item.state === 'off') {
       return 'OFF';
     }
-    return String(state || '...').toUpperCase();
+    return String(item.state || '...').toUpperCase();
+  }
+
+  function binaryLabel(item) {
+    var on = item.state === 'on';
+    var dc = item.deviceClass;
+    if (dc === 'door' || dc === 'window' || dc === 'garage_door' || dc === 'opening') {
+      return on ? 'OPEN' : 'CLOSED';
+    }
+    if (dc === 'motion' || dc === 'occupancy' || dc === 'presence') {
+      return on ? 'DETECTED' : 'CLEAR';
+    }
+    if (dc === 'moisture') {
+      return on ? 'WET' : 'DRY';
+    }
+    if (dc === 'smoke' || dc === 'gas' || dc === 'carbon_monoxide') {
+      return on ? 'ALERT' : 'CLEAR';
+    }
+    if (dc === 'tamper') {
+      return on ? 'TAMPER' : 'CLEAR';
+    }
+    return on ? 'ON' : 'OFF';
+  }
+
+  function unitFor(item) {
+    if (item.domain !== 'sensor') {
+      return '';
+    }
+    return item.unit || '';
+  }
+
+  /* -------------------------------------------------------------- icons */
+
+  var ICON_BUILDERS = {
+    temperature: function () {
+      return '<path d="M10 14.5V5a2 2 0 1 1 4 0v9.5a4 4 0 1 1-4 0z"/><path d="M12 9v6"/>';
+    },
+    humidity: function () {
+      return '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>';
+    },
+    power: function () {
+      return '<path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/>';
+    },
+    energy: function () {
+      return '<path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/>';
+    },
+    voltage: function () {
+      return '<path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z"/>';
+    },
+    current: function () {
+      return '<path d="M3 12c3-5 6-5 9 0s6 5 9 0"/>';
+    },
+    battery: function () {
+      return '<rect x="3" y="8" width="16" height="8" rx="2"/><path d="M21 11v2"/>';
+    },
+    pressure: function () {
+      return '<circle cx="12" cy="12" r="8"/><path d="M12 12l4-3"/>';
+    },
+    signal_strength: function () {
+      return '<path d="M4 20v-3M9 20v-6M14 20v-9M19 20V5"/>';
+    },
+    illuminance: function () {
+      return '<circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>';
+    },
+    door: function () {
+      return '<path d="M6 3h12v18H6z"/><path d="M15 12h.01"/>';
+    },
+    window: function () {
+      return '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M12 4v16M4 12h16"/>';
+    },
+    motion: function () {
+      return '<circle cx="12" cy="6" r="2"/><path d="M12 8v6l-3 4M12 14l3 4M7 11l5-1 5 1"/>';
+    },
+    smoke: function () {
+      return '<path d="M5 15a4 4 0 0 1 1-7 5 5 0 0 1 9 1 3 3 0 0 1 1 6z"/>';
+    },
+    moisture: function () {
+      return '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>';
+    },
+    sensor: function () {
+      return '<circle cx="12" cy="12" r="8"/><path d="M12 12l4-3"/>';
+    }
+  };
+
+  function iconSvg(item) {
+    var key = item.deviceClass || '';
+    if (!ICON_BUILDERS[key]) {
+      key = 'sensor';
+    }
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" ' +
+      'stroke-linecap="round" stroke-linejoin="round">' + ICON_BUILDERS[key]() + '</svg>';
   }
 
   /* --------------------------------------------------------- storage */
@@ -818,14 +1057,86 @@ body {
         entity_id: cached.entity_id,
         domain: cached.domain,
         name: cached.name,
-        state: cached.state
+        state: cached.state,
+        unit: cached.unit,
+        deviceClass: cached.deviceClass,
+        stateClass: cached.stateClass
       };
     }
     return {
       entity_id: entityId,
       domain: domainOf(entityId),
       name: entityId,
-      state: '...'
+      state: '...',
+      unit: '',
+      deviceClass: '',
+      stateClass: ''
+    };
+  }
+
+  function buildTile(item) {
+    return isSensorEntity(item) ? buildSensorTile(item) : buildToggleTile(item);
+  }
+
+  function buildToggleTile(item) {
+    var tile = div('tile');
+    var badge = div('badge');
+    badge.textContent = item.domain.toUpperCase();
+    var name = div('name');
+    name.textContent = item.name;
+    var value = div('value');
+    value.textContent = valueFor(item);
+
+    tile.appendChild(badge);
+    tile.appendChild(name);
+    tile.appendChild(value);
+
+    return { tile: tile, badge: badge, name: name, value: value };
+  }
+
+  function buildSensorTile(item) {
+    var tile = div('tile sensor-tile');
+
+    var head = div('sensor-head');
+    var icon = div('icon');
+    icon.innerHTML = iconSvg(item);
+    var badge = div('badge');
+    badge.textContent = item.domain === 'binary_sensor' ? 'BINARY SENSOR' : 'SENSOR';
+    head.appendChild(icon);
+    head.appendChild(badge);
+
+    var name = div('name');
+    name.textContent = item.name;
+
+    var readout = div('sensor-readout');
+    var value = span('value');
+    value.textContent = valueFor(item);
+    var unit = span('unit');
+    unit.textContent = unitFor(item);
+    readout.appendChild(value);
+    readout.appendChild(unit);
+
+    tile.appendChild(head);
+    tile.appendChild(name);
+    tile.appendChild(readout);
+
+    var canvas = null;
+    if (item.domain === 'sensor') {
+      canvas = document.createElement('canvas');
+      canvas.className = 'spark';
+      canvas.width = 480;
+      canvas.height = 96;
+      tile.appendChild(canvas);
+    }
+
+    return {
+      tile: tile,
+      icon: icon,
+      badge: badge,
+      name: name,
+      value: value,
+      unit: unit,
+      canvas: canvas
     };
   }
 
@@ -844,28 +1155,10 @@ body {
     var i;
     for (i = 0; i < config.entities.length; i++) {
       var item = modelFor(config.entities[i]);
-      var refs = document.createElement('div');
-      refs.className = 'tile';
-
-      var badge = document.createElement('div');
-      badge.className = 'badge';
-      badge.textContent = item.domain.toUpperCase();
-
-      var name = document.createElement('div');
-      name.className = 'name';
-      name.textContent = item.name;
-
-      var value = document.createElement('div');
-      value.className = 'value';
-      value.textContent = valueFor(item.state);
-
-      refs.appendChild(badge);
-      refs.appendChild(name);
-      refs.appendChild(value);
-
-      el.grid.appendChild(refs);
+      var refs = buildTile(item);
+      el.grid.appendChild(refs.tile);
       dash.items.push(item);
-      dash.els.push({ tile: refs, badge: badge, name: name, value: value });
+      dash.els.push(refs);
     }
 
     var rows = Math.ceil(config.entities.length / COLS);
@@ -883,14 +1176,26 @@ body {
     var i;
     for (i = 0; i < dash.els.length; i++) {
       var item = dash.items[i];
-      var cls = 'tile';
-      if (item && item.state === 'on') {
-        cls += ' on';
+      var refs = dash.els[i];
+      if (!item || !refs) {
+        continue;
+      }
+      var cls;
+      if (isSensorEntity(item)) {
+        cls = 'tile sensor-tile';
+        if (item.domain === 'binary_sensor' && item.state === 'on') {
+          cls += ' alert';
+        }
+      } else {
+        cls = 'tile';
+        if (item.state === 'on') {
+          cls += ' on';
+        }
       }
       if (i === dash.focus) {
         cls += ' focused';
       }
-      dash.els[i].tile.className = cls;
+      refs.tile.className = cls;
     }
   }
 
@@ -900,9 +1205,17 @@ body {
     if (!item || !refs) {
       return;
     }
-    refs.badge.textContent = item.domain.toUpperCase();
-    refs.name.textContent = item.name;
-    refs.value.textContent = valueFor(item.state);
+
+    if (isSensorEntity(item)) {
+      refs.icon.innerHTML = iconSvg(item);
+      refs.name.textContent = item.name;
+      refs.value.textContent = valueFor(item);
+      refs.unit.textContent = unitFor(item);
+    } else {
+      refs.badge.textContent = item.domain.toUpperCase();
+      refs.name.textContent = item.name;
+      refs.value.textContent = valueFor(item);
+    }
     applyTileClasses();
   }
 
@@ -948,7 +1261,7 @@ body {
 
   function toggleDashboard() {
     var item = dash.items[dash.focus];
-    if (!item || !config.token) {
+    if (!item || !config.token || !isToggleEntity(item)) {
       return;
     }
 
@@ -982,6 +1295,13 @@ body {
     });
   }
 
+  function applyModel(data, index) {
+    var model = modelFromState(data);
+    entityCache[model.entity_id] = model;
+    dash.items[index] = model;
+    updateTile(index);
+  }
+
   function refreshOne(index) {
     var item = dash.items[index];
     if (!item) {
@@ -995,10 +1315,7 @@ body {
       if (status === 200) {
         var data = parseJson(text);
         if (data && data.entity_id) {
-          var model = modelFromState(data);
-          entityCache[model.entity_id] = model;
-          dash.items[index] = model;
-          updateTile(index);
+          applyModel(data, index);
           setStatus('online', 'ONLINE');
           return;
         }
@@ -1036,10 +1353,7 @@ body {
           if (status === 200) {
             var data = parseJson(text);
             if (data && data.entity_id) {
-              var model = modelFromState(data);
-              entityCache[model.entity_id] = model;
-              dash.items[index] = model;
-              updateTile(index);
+              applyModel(data, index);
               successes++;
             }
           } else if (status === 401) {
@@ -1061,22 +1375,331 @@ body {
     }
   }
 
-  function stopPoll() {
+  /* --------------------------------------------------------- history */
+
+  function parseHistory(data, entityId) {
+    var points = [];
+    if (!data || !data.length) {
+      return points;
+    }
+
+    var records = Array.isArray(data[0]) ? data[0] : data;
+    if (!records) {
+      return points;
+    }
+
+    var i;
+    for (i = 0; i < records.length; i++) {
+      var record = records[i];
+      if (!record) {
+        continue;
+      }
+      if (record.entity_id && record.entity_id !== entityId) {
+        continue;
+      }
+      var value = parseFloat(record.state);
+      var time = Date.parse(record.last_changed || record.last_updated || '');
+      if (!isNaN(value) && !isNaN(time)) {
+        points.push({ t: time, v: value });
+      }
+    }
+    return points;
+  }
+
+  function drawHistory(canvas, points) {
+    if (!canvas) {
+      return;
+    }
+    var ctx = canvas.getContext('2d');
+    if (!ctx) {
+      return;
+    }
+    var w = canvas.width;
+    var h = canvas.height;
+
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.10)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, h - 1);
+    ctx.lineTo(w, h - 1);
+    ctx.stroke();
+
+    if (!points || points.length < 2) {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
+      ctx.font = '18px sans-serif';
+      ctx.fillText('no history', 8, h / 2 + 6);
+      return;
+    }
+
+    var min = points[0].v;
+    var max = points[0].v;
+    var i;
+    for (i = 1; i < points.length; i++) {
+      if (points[i].v < min) {
+        min = points[i].v;
+      }
+      if (points[i].v > max) {
+        max = points[i].v;
+      }
+    }
+
+    var range = max - min;
+    if (range === 0) {
+      range = 1;
+    }
+    var t0 = points[0].t;
+    var t1 = points[points.length - 1].t;
+    var trange = t1 - t0;
+    if (trange === 0) {
+      trange = 1;
+    }
+    var pad = 6;
+
+    function x(point) {
+      return pad + ((point.t - t0) / trange) * (w - 2 * pad);
+    }
+    function y(point) {
+      return (h - 8) - ((point.v - min) / range) * (h - 16);
+    }
+
+    ctx.beginPath();
+    ctx.moveTo(x(points[0]), h - 1);
+    for (i = 0; i < points.length; i++) {
+      ctx.lineTo(x(points[i]), y(points[i]));
+    }
+    ctx.lineTo(x(points[points.length - 1]), h - 1);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(41, 214, 255, 0.10)';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(x(points[0]), y(points[0]));
+    for (i = 1; i < points.length; i++) {
+      ctx.lineTo(x(points[i]), y(points[i]));
+    }
+    ctx.strokeStyle = '#29d6ff';
+    ctx.lineWidth = 3;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke();
+  }
+
+  function fetchHistory(index) {
+    var item = dash.items[index];
+    var refs = dash.els[index];
+    if (!item || !refs || item.domain !== 'sensor' || !refs.canvas) {
+      return;
+    }
+
+    var start = new Date(Date.now() - HISTORY_HOURS * 3600 * 1000).toISOString();
+    var path = '/api/history/period/' + encodeURIComponent(start) +
+      '?filter_entity_id=' + encodeURIComponent(item.entity_id) + '&minimal_response';
+
+    var myGen = gen;
+    httpRequest({ method: 'GET', path: path }, function (status, text) {
+      if (myGen !== gen) {
+        return;
+      }
+      if (status !== 200) {
+        return;
+      }
+      drawHistory(refs.canvas, parseHistory(parseJson(text), item.entity_id));
+    });
+  }
+
+  function refreshHistoryAll() {
+    if (!config.token) {
+      return;
+    }
+    var i;
+    for (i = 0; i < dash.items.length; i++) {
+      if (dash.items[i] && dash.items[i].domain === 'sensor') {
+        fetchHistory(i);
+      }
+    }
+  }
+
+  function scheduleHistoryRefresh() {
+    if (historyDebounce) {
+      window.clearTimeout(historyDebounce);
+    }
+    historyDebounce = window.setTimeout(function () {
+      historyDebounce = null;
+      refreshHistoryAll();
+    }, 3000);
+  }
+
+  /* --------------------------------------------------------- websocket */
+
+  function wsUrl() {
+    var base = config.url || window.location.origin;
+    if (/^https:/i.test(base)) {
+      return base.replace(/^https:/i, 'wss:') + '/api/websocket';
+    }
+    if (/^http:/i.test(base)) {
+      return base.replace(/^http:/i, 'ws:') + '/api/websocket';
+    }
+    var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return protocol + '//' + window.location.host + '/api/websocket';
+  }
+
+  function connectWs() {
+    if (!config.token) {
+      return;
+    }
+
+    var myGen = gen;
+    var socket;
+    try {
+      socket = new WebSocket(wsUrl());
+    } catch (e) {
+      scheduleWsRetry(myGen);
+      return;
+    }
+
+    ws = socket;
+    wsOpen = false;
+    wsAuthFailed = false;
+
+    socket.onmessage = function (event) {
+      if (myGen !== gen || socket !== ws) {
+        return;
+      }
+      var msg = parseJson(event.data);
+      if (!msg || !msg.type) {
+        return;
+      }
+      if (msg.type === 'auth_required') {
+        socket.send(JSON.stringify({ type: 'auth', access_token: config.token }));
+      } else if (msg.type === 'auth_ok') {
+        wsOpen = true;
+        setStatus('online', 'ONLINE');
+        socket.send(JSON.stringify({ id: 1, type: 'subscribe_events', event_type: 'state_changed' }));
+      } else if (msg.type === 'auth_invalid') {
+        wsOpen = false;
+        wsAuthFailed = true;
+        setStatus('auth', 'TOKEN ERR');
+        try {
+          socket.close();
+        } catch (e2) {
+          /* ignore */
+        }
+      } else if (msg.type === 'event' && msg.event) {
+        handleWsEvent(msg.event);
+      }
+    };
+
+    socket.onclose = function () {
+      if (socket !== ws) {
+        return;
+      }
+      ws = null;
+      wsOpen = false;
+      if (myGen !== gen || wsAuthFailed) {
+        return;
+      }
+      scheduleWsRetry(myGen);
+    };
+
+    socket.onerror = function () {
+      wsOpen = false;
+    };
+  }
+
+  function scheduleWsRetry(myGen) {
+    if (wsRetryTimer) {
+      return;
+    }
+    wsRetryTimer = window.setTimeout(function () {
+      wsRetryTimer = null;
+      if (myGen === gen) {
+        connectWs();
+      }
+    }, WS_RETRY_MS);
+  }
+
+  function handleWsEvent(event) {
+    var data = event.data || {};
+    var newState = data.new_state;
+    if (!newState || !newState.entity_id) {
+      return;
+    }
+
+    var index = -1;
+    var i;
+    for (i = 0; i < dash.items.length; i++) {
+      if (dash.items[i] && dash.items[i].entity_id === newState.entity_id) {
+        index = i;
+        break;
+      }
+    }
+    if (index === -1) {
+      return;
+    }
+
+    var model = modelFromState(newState);
+    entityCache[model.entity_id] = model;
+    dash.items[index] = model;
+    updateTile(index);
+    setStatus('online', 'ONLINE');
+
+    if (model.domain === 'sensor') {
+      scheduleHistoryRefresh();
+    }
+  }
+
+  /* -------------------------------------------------------- lifecycle */
+
+  function stopLive() {
+    gen++;
+
     if (pollTimer) {
       window.clearInterval(pollTimer);
       pollTimer = null;
     }
+    if (historyTimer) {
+      window.clearInterval(historyTimer);
+      historyTimer = null;
+    }
+    if (historyDebounce) {
+      window.clearTimeout(historyDebounce);
+      historyDebounce = null;
+    }
+    if (wsRetryTimer) {
+      window.clearTimeout(wsRetryTimer);
+      wsRetryTimer = null;
+    }
+
+    wsOpen = false;
+    wsAuthFailed = false;
+    if (ws) {
+      var socket = ws;
+      ws = null;
+      try {
+        socket.close();
+      } catch (e) {
+        /* ignore */
+      }
+    }
   }
 
   function applyDashboard() {
-    gen++;
-    stopPoll();
+    stopLive();
     buildGrid();
 
     if (config.token && config.entities.length) {
       setStatus('loading', 'LOADING');
       refreshAll();
-      pollTimer = window.setInterval(refreshAll, POLL_MS);
+      refreshHistoryAll();
+      connectWs();
+      pollTimer = window.setInterval(function () {
+        if (!wsOpen) {
+          refreshAll();
+        }
+      }, POLL_MS);
+      historyTimer = window.setInterval(refreshHistoryAll, HISTORY_REFRESH_MS);
     }
   }
 
@@ -1218,7 +1841,7 @@ body {
         return;
       }
       settings.connecting = false;
-      el.connectBtn.textContent = 'Connect & choose switches';
+      el.connectBtn.textContent = 'Connect & choose tiles';
 
       if (status === 200) {
         var data = parseJson(text);
@@ -1239,23 +1862,10 @@ body {
     });
   }
 
-  function openPicker(states) {
-    picker.items = [];
-    picker.selected = {};
-    picker.focus = 0;
+  /* ------------------------------------------------------- entity picker */
 
-    var i;
-    for (i = 0; i < states.length; i++) {
-      var id = states[i].entity_id || '';
-      if (SELECTABLE_DOMAINS.indexOf(domainOf(id)) === -1) {
-        continue;
-      }
-      var model = modelFromState(states[i]);
-      entityCache[id] = model;
-      picker.items.push(model);
-    }
-
-    picker.items.sort(function (a, b) {
+  function sortByName(list) {
+    list.sort(function (a, b) {
       var x = a.name.toLowerCase();
       var y = b.name.toLowerCase();
       if (x < y) {
@@ -1266,15 +1876,65 @@ body {
       }
       return 0;
     });
+  }
 
-    if (!picker.items.length) {
-      showError(el.settingsError, 'No switches, lights, or input booleans found.');
+  function setPickerItems() {
+    picker.items = picker.tab === 'toggles' ? picker.toggleItems : picker.sensorItems;
+  }
+
+  function pickerHas(entityId) {
+    var i;
+    for (i = 0; i < picker.toggleItems.length; i++) {
+      if (picker.toggleItems[i].entity_id === entityId) {
+        return true;
+      }
+    }
+    for (i = 0; i < picker.sensorItems.length; i++) {
+      if (picker.sensorItems[i].entity_id === entityId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function openPicker(states) {
+    picker.toggleItems = [];
+    picker.sensorItems = [];
+    picker.selected = {};
+    picker.focus = 0;
+
+    var i;
+    for (i = 0; i < states.length; i++) {
+      var id = states[i].entity_id || '';
+      var domain = domainOf(id);
+      var isToggle = TOGGLE_DOMAINS.indexOf(domain) !== -1;
+      var isSensor = SENSOR_DOMAINS.indexOf(domain) !== -1;
+      if (!isToggle && !isSensor) {
+        continue;
+      }
+      var model = modelFromState(states[i]);
+      entityCache[id] = model;
+      if (isToggle) {
+        picker.toggleItems.push(model);
+      } else {
+        picker.sensorItems.push(model);
+      }
+    }
+
+    sortByName(picker.toggleItems);
+    sortByName(picker.sensorItems);
+
+    if (!picker.toggleItems.length && !picker.sensorItems.length) {
+      showError(el.settingsError, 'No switches or sensors found.');
       return;
     }
 
-    for (i = 0; i < picker.items.length; i++) {
-      if (config.entities.indexOf(picker.items[i].entity_id) !== -1) {
-        picker.selected[picker.items[i].entity_id] = true;
+    picker.tab = picker.toggleItems.length ? 'toggles' : 'sensors';
+    setPickerItems();
+
+    for (i = 0; i < config.entities.length; i++) {
+      if (pickerHas(config.entities[i])) {
+        picker.selected[config.entities[i]] = true;
       }
     }
 
@@ -1282,6 +1942,7 @@ body {
     hideError(el.entityError);
     el.connectionView.classList.add('hidden');
     el.entityView.classList.remove('hidden');
+    renderPickerTabs();
     renderPicker();
     updatePickerHint();
   }
@@ -1293,6 +1954,32 @@ body {
     renderConnection();
   }
 
+  function renderPickerTabs() {
+    el.tabToggles.textContent = 'Toggles (' + picker.toggleItems.length + ')';
+    el.tabSensors.textContent = 'Sensors (' + picker.sensorItems.length + ')';
+    if (picker.tab === 'toggles') {
+      el.tabToggles.className = 'ptab active';
+      el.tabSensors.className = 'ptab';
+    } else {
+      el.tabToggles.className = 'ptab';
+      el.tabSensors.className = 'ptab active';
+    }
+  }
+
+  function switchPickerTab() {
+    var next = picker.tab === 'toggles' ? 'sensors' : 'toggles';
+    var list = next === 'toggles' ? picker.toggleItems : picker.sensorItems;
+    if (!list.length) {
+      return;
+    }
+    picker.tab = next;
+    setPickerItems();
+    picker.focus = 0;
+    renderPickerTabs();
+    renderPicker();
+    updatePickerHint();
+  }
+
   function renderPicker() {
     el.entityList.innerHTML = '';
     picker.rowEls = [];
@@ -1301,18 +1988,14 @@ body {
     var i;
     for (i = 0; i < picker.items.length; i++) {
       var item = picker.items[i];
-      var row = document.createElement('div');
-      row.className = 'entity-row';
+      var row = div('entity-row');
 
-      var chk = document.createElement('span');
-      chk.className = 'chk';
+      var chk = span('chk');
 
-      var name = document.createElement('span');
-      name.className = 'row-name';
+      var name = span('row-name');
       name.textContent = item.name;
 
-      var meta = document.createElement('span');
-      meta.className = 'row-meta';
+      var meta = span('row-meta');
       meta.textContent = item.domain + ' \u00b7 ' + item.state;
 
       row.appendChild(chk);
@@ -1325,7 +2008,7 @@ body {
     highlightPickerFocus();
   }
 
-  function updatePickerHint() {
+  function selectedCount() {
     var count = 0;
     var id;
     for (id in picker.selected) {
@@ -1333,7 +2016,11 @@ body {
         count++;
       }
     }
-    el.entityHint.textContent = 'Choose toggles with OK \u00b7 ' + count + ' selected';
+    return count;
+  }
+
+  function updatePickerHint() {
+    el.entityHint.textContent = 'Choose tiles with OK \u00b7 ' + selectedCount() + ' of ' + MAX_TILES + ' selected';
   }
 
   function highlightPickerFocus() {
@@ -1392,7 +2079,17 @@ body {
   function activatePicker() {
     if (picker.focus < picker.items.length) {
       var id = picker.items[picker.focus].entity_id;
-      picker.selected[id] = !picker.selected[id];
+      var on = !!picker.selected[id];
+      if (!on && selectedCount() >= MAX_TILES) {
+        showError(el.entityError, 'Up to ' + MAX_TILES + ' tiles.');
+        return;
+      }
+      if (on) {
+        delete picker.selected[id];
+      } else {
+        picker.selected[id] = true;
+      }
+      hideError(el.entityError);
       highlightPickerFocus();
       updatePickerHint();
       return;
@@ -1403,15 +2100,19 @@ body {
   function savePicker() {
     var ids = [];
     var i;
-    for (i = 0; i < picker.items.length; i++) {
-      var id = picker.items[i].entity_id;
-      if (picker.selected[id]) {
-        ids.push(id);
+    for (i = 0; i < picker.toggleItems.length; i++) {
+      if (picker.selected[picker.toggleItems[i].entity_id]) {
+        ids.push(picker.toggleItems[i].entity_id);
+      }
+    }
+    for (i = 0; i < picker.sensorItems.length; i++) {
+      if (picker.selected[picker.sensorItems[i].entity_id]) {
+        ids.push(picker.sensorItems[i].entity_id);
       }
     }
 
     if (!ids.length) {
-      showError(el.entityError, 'Select at least one toggle.');
+      showError(el.entityError, 'Select at least one tile.');
       return;
     }
 
@@ -1441,6 +2142,8 @@ body {
         movePicker(-1);
       } else if (code === KEYS.DOWN) {
         movePicker(1);
+      } else if (code === KEYS.LEFT || code === KEYS.RIGHT) {
+        switchPickerTab();
       } else if (code === KEYS.ENTER) {
         activatePicker();
       } else if (code === KEYS.BLUE || code === KEYS.BACK || code === KEYS.ESC) {
@@ -1556,13 +2259,11 @@ body {
     var rowIndex;
     var colIndex;
     for (rowIndex = 0; rowIndex < layout.length; rowIndex++) {
-      var rowElement = document.createElement('div');
-      rowElement.className = 'kb-row';
+      var rowElement = div('kb-row');
       var rowItems = [];
       for (colIndex = 0; colIndex < layout[rowIndex].length; colIndex++) {
         var code = layout[rowIndex][colIndex];
-        var keyElement = document.createElement('div');
-        keyElement.className = 'kb-key' + (code.length > 1 ? ' wide' : '');
+        var keyElement = div('kb-key' + (code.length > 1 ? ' wide' : ''));
         keyElement.textContent = this.keyLabel(code);
         keyElement.setAttribute('data-code', code);
         rowElement.appendChild(keyElement);
@@ -1590,8 +2291,7 @@ body {
     var col;
     for (row = 0; row < this.rows.length; row++) {
       for (col = 0; col < this.rows[row].length; col++) {
-        var focused = row === this.focusRow && col === this.focusCol;
-        if (focused) {
+        if (row === this.focusRow && col === this.focusCol) {
           this.rows[row][col].element.classList.add('focused');
         } else {
           this.rows[row][col].element.classList.remove('focused');
@@ -1752,6 +2452,8 @@ body {
     el.entityHint = byId('entity-hint');
     el.entityList = byId('entity-list');
     el.saveEntities = byId('save-entities');
+    el.tabToggles = byId('tab-toggles');
+    el.tabSensors = byId('tab-sensors');
 
     keyboard = new Keyboard();
     collectConnFields();
