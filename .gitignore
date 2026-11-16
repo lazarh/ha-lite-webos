@@ -1,0 +1,6 @@
+dist/
+node_modules/
+*.ipk
+*.local.js
+config.local.*
+.DS_Store
