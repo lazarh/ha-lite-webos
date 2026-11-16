@@ -7,6 +7,7 @@ refresh interval) in /data/ha-lite.json. Serves /config.json and /api/config.
 """
 import json
 import os
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 OPTIONS = "/data/options.json"
@@ -16,6 +17,7 @@ PORT = 8098
 ALLOWED_THEMES = ("amber", "blue", "emerald", "rose")
 ALLOWED_LAYOUTS = ("auto", "large", "small")
 MAX_ENTITIES = 12
+KEYS = ("entities", "title", "theme", "layout", "chart_hours", "refresh_seconds")
 
 DEFAULTS = {
     "entities": [],
@@ -93,15 +95,40 @@ def save_config(payload):
     return config
 
 
+def supervisor_options():
+    """Read the add-on options via the Supervisor API (upgrade migration)."""
+    token = os.environ.get("SUPERVISOR_TOKEN", "")
+    if not token:
+        return {}
+    try:
+        request = urllib.request.Request(
+            "http://supervisor/addons/self/info",
+            headers={"Authorization": "Bearer " + token},
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            data = json.loads(response.read().decode("utf-8"))
+        options = (data.get("data") or {}).get("options") or {}
+        return options if isinstance(options, dict) else {}
+    except Exception:
+        return {}
+
+
 def migrate_legacy():
     """Seed the UI config from the old Supervisor options on first run."""
     if os.path.exists(STORE):
         return
     options = read_json(OPTIONS, {}) or {}
-    seed = {}
-    for key in ("entities", "title", "theme", "layout", "chart_hours", "refresh_seconds"):
-        if key in options:
-            seed[key] = options[key]
+
+    # Older versions kept entities/title/layout in the Supervisor options.
+    # The schema change can strip those from /data/options.json, so fall back
+    # to the Supervisor's stored options.
+    if not options.get("entities"):
+        extra = supervisor_options()
+        for key in KEYS:
+            if key not in options and key in extra:
+                options[key] = extra[key]
+
+    seed = {key: options[key] for key in KEYS if key in options}
     if seed:
         save_config(seed)
 
@@ -120,6 +147,8 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        if self.path.startswith("/config.json") or self.path.startswith("/api/config"):
+            migrate_legacy()
         if self.path.startswith("/config.json"):
             payload = {"token": load_token()}
             payload.update(load_config())
