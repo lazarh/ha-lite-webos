@@ -195,6 +195,22 @@ JSON
     exit 1
   fi
   echo "add-on mode rendered 3 tiles with settings disabled"
+
+  echo "== add-on config POST =="
+  curl -fsS -X POST -H "Content-Type: application/json" \
+    -d '{"entities":["switch.desk_lamp","sensor.living_room_temperature"],"theme":"blue","layout":"small","chart_hours":12,"refresh_seconds":5}' \
+    "$BASE3/local/halite/api/config" | grep -q '"ok": true'
+  curl -fsS "$BASE3/local/halite/config.json" \
+    | python3 -c 'import sys, json; d = json.load(sys.stdin); assert d["theme"] == "blue", d; assert d["layout"] == "small", d; assert len(d["entities"]) == 2, d; print("config saved:", d["theme"], d["layout"], len(d["entities"]), "entities")'
+
+  echo "== config UI render =="
+  chromium --headless --no-sandbox --disable-gpu --hide-scrollbars \
+    --user-data-dir="$TMP/profile4" --window-size=1920,1080 --virtual-time-budget=8000 \
+    --dump-dom "$BASE3/local/halite/index.html?config=1" 2>/dev/null >"$TMP/dom4.html"
+  grep -q 'id="config" class="overlay"' "$TMP/dom4.html"
+  grep -q 'Configure HA Lite' "$TMP/dom4.html"
+  grep -q 'Desk Lamp' "$TMP/dom4.html"
+  echo "config UI rendered with entity list"
 else
   echo "chromium not found - skipping render checks" >&2
 fi

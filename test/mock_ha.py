@@ -355,6 +355,35 @@ async def handle(reader, writer):
         writer.close()
         return
 
+    if path in ("/api/config", "/local/halite/api/config"):
+        keys = ("entities", "title", "theme", "layout", "chart_hours", "refresh_seconds")
+        if method == "POST":
+            length = int(headers.get("content-length", "0") or "0")
+            body = await reader.readexactly(length) if length else b"{}"
+            try:
+                payload = json.loads(body.decode("utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                payload = None
+            if not isinstance(payload, dict):
+                writer.write(http_response(400, json.dumps({"message": "Invalid JSON"})))
+            else:
+                if ADDON_CONFIG is not None:
+                    for key in keys:
+                        if key in payload:
+                            ADDON_CONFIG[key] = payload[key]
+                out = {}
+                for key in keys:
+                    out[key] = (ADDON_CONFIG or {}).get(key)
+                writer.write(http_response(200, json.dumps({"ok": True, "config": out})))
+        else:
+            out = {}
+            for key in keys:
+                out[key] = (ADDON_CONFIG or {}).get(key)
+            writer.write(http_response(200, json.dumps(out)))
+        await writer.drain()
+        writer.close()
+        return
+
     auth = headers.get("authorization", "")
     if path.startswith("/api/") and auth != "Bearer " + CONFIG["token"]:
         writer.write(http_response(401, json.dumps({"message": "Unauthorized"})))
