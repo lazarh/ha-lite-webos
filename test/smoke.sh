@@ -16,9 +16,10 @@ TOKEN="${TOKEN:-demo-token}"
 TMP=$(mktemp -d)
 MOCK_PID=""
 MOCK2_PID=""
+MOCK3_PID=""
 
 cleanup() {
-  for pid in ${MOCK_PID:-} ${MOCK2_PID:-}; do
+  for pid in ${MOCK_PID:-} ${MOCK2_PID:-} ${MOCK3_PID:-}; do
     [ -n "$pid" ] && kill "$pid" 2>/dev/null || true
   done
   rm -rf "$TMP"
@@ -171,6 +172,29 @@ PY
   grep -q 'Front Door' "$TMP/dom2.html"
   grep -q 'id="settings" class="overlay hidden"' "$TMP/dom2.html"
   echo "four tiles rendered (including sensor canvas)"
+
+  echo "== add-on mode render (config.json, no on-TV setup) =="
+  cat > "$TMP/addon.json" <<'JSON'
+{"token":"demo-token","title":"HA Lite","chart_hours":12,"refresh_seconds":5,"entities":["switch.desk_lamp","sensor.living_room_temperature","binary_sensor.front_door"]}
+JSON
+  PORT3=$((PORT + 2))
+  BASE3="http://127.0.0.1:$PORT3"
+  python3 test/mock_ha.py --port "$PORT3" --token "$TOKEN" --addon-config "$TMP/addon.json" >"$TMP/mock3.log" 2>&1 &
+  MOCK3_PID=$!
+  wait_for "$BASE3" || { echo "third mock did not start" >&2; cat "$TMP/mock3.log" >&2; exit 1; }
+
+  curl -fsS "$BASE3/local/halite/config.json" | grep -q '"entities"'
+  chromium --headless --no-sandbox --disable-gpu --hide-scrollbars \
+    --user-data-dir="$TMP/profile3" --window-size=1920,1080 --virtual-time-budget=6000 \
+    --dump-dom "$BASE3/local/halite/index.html" 2>/dev/null >"$TMP/dom3.html"
+  [ "$(grep -o 'class="tile' "$TMP/dom3.html" | wc -l)" -eq 3 ]
+  grep -q 'id="settings" class="overlay hidden"' "$TMP/dom3.html"
+  grep -q 'D-PAD Move' "$TMP/dom3.html"
+  if grep -q 'BLUE Settings' "$TMP/dom3.html"; then
+    echo "footer should not advertise settings in add-on mode" >&2
+    exit 1
+  fi
+  echo "add-on mode rendered 3 tiles with settings disabled"
 else
   echo "chromium not found - skipping render checks" >&2
 fi

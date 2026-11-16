@@ -26,6 +26,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEBAPP = os.path.join(ROOT, "webapp", "index.html")
 
 CONFIG = {"token": "demo-token"}
+ADDON_CONFIG = None
 
 ENTITY_DATA = {
     "switch.desk_lamp": {
@@ -345,6 +346,15 @@ async def handle(reader, writer):
         writer.close()
         return
 
+    if path in ("/config.json", "/local/halite/config.json"):
+        if ADDON_CONFIG is not None:
+            writer.write(http_response(200, json.dumps(ADDON_CONFIG)))
+        else:
+            writer.write(http_response(404, json.dumps({"message": "Not found"})))
+        await writer.drain()
+        writer.close()
+        return
+
     auth = headers.get("authorization", "")
     if path.startswith("/api/") and auth != "Bearer " + CONFIG["token"]:
         writer.write(http_response(401, json.dumps({"message": "Unauthorized"})))
@@ -417,17 +427,21 @@ async def main_async(host, port):
 
 
 def main():
-    global WEBAPP
+    global WEBAPP, ADDON_CONFIG
 
     parser = argparse.ArgumentParser(description="Mock Home Assistant for HA Lite")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8099)
     parser.add_argument("--token", default="demo-token")
     parser.add_argument("--webapp", default=WEBAPP, help="path to the app HTML to serve")
+    parser.add_argument("--addon-config", default=None, help="JSON file served as /config.json")
     args = parser.parse_args()
 
     WEBAPP = args.webapp
     CONFIG["token"] = args.token
+    if args.addon_config:
+        with open(args.addon_config, "r", encoding="utf-8") as fh:
+            ADDON_CONFIG = json.load(fh)
 
     try:
         asyncio.run(main_async(args.host, args.port))
