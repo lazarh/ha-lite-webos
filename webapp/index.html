@@ -38,6 +38,8 @@ body {
   left: 0;
   width: 100%;
   height: 100%;
+  box-sizing: border-box;
+  padding: 12px 20px;
   display: flex;
   flex-direction: column;
 }
@@ -45,9 +47,9 @@ body {
 /* ------------------------------------------------------------ top bar */
 
 #topbar {
-  height: 116px;
+  height: 104px;
   box-sizing: border-box;
-  padding: 28px 56px 10px;
+  padding: 22px 40px 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -88,14 +90,16 @@ body {
 
 .status.loading,
 .status.auth,
-.status.noconfig {
+.status.noconfig,
+.status.reconnecting {
   color: #ff9f1a;
   border-color: #4a2f00;
 }
 
 .status.loading .dot,
 .status.auth .dot,
-.status.noconfig .dot {
+.status.noconfig .dot,
+.status.reconnecting .dot {
   background: #ff9f1a;
 }
 
@@ -152,8 +156,8 @@ body {
   position: relative;
   box-sizing: border-box;
   width: 560px;
-  height: 396px;
-  margin: 18px;
+  height: 392px;
+  margin: 17px;
   padding: 36px 40px;
   display: flex;
   flex-direction: column;
@@ -161,12 +165,17 @@ body {
   border: 2px solid #262626;
   border-radius: 18px;
   color: #f2f2f2;
-  transition: background-color 120ms ease, box-shadow 120ms ease;
+  transition: transform 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
 }
 
 .tile.focused {
   z-index: 2;
-  box-shadow: 0 0 0 6px #29d6ff, 0 20px 60px rgba(0, 0, 0, 0.65);
+  transform: scale(1.015);
+  box-shadow: 0 0 0 8px #29d6ff, 0 20px 60px rgba(0, 0, 0, 0.65);
+}
+
+.tile.pressed {
+  transform: scale(0.985);
 }
 
 .tile.on {
@@ -302,13 +311,50 @@ body {
 /* ------------------------------------------------------------ footer */
 
 #footer {
-  height: 70px;
-  padding-bottom: 18px;
+  height: 64px;
+  padding-bottom: 14px;
   box-sizing: border-box;
   text-align: center;
   font-size: 21px;
   letter-spacing: 2px;
   color: #7c7c7c;
+}
+
+/* ------------------------------------------------------------- toast */
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  width: 720px;
+  margin-left: -360px;
+  box-sizing: border-box;
+  padding: 18px 26px;
+  text-align: center;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  color: #ffffff;
+  background: #141414;
+  border: 2px solid #3a3a3a;
+  border-radius: 14px;
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.7);
+  z-index: 45;
+}
+
+.toast.warn {
+  color: #ffb340;
+  border-color: #6b4a00;
+}
+
+.toast.error {
+  color: #ff6b6b;
+  border-color: #5a1010;
+}
+
+.toast.ok {
+  color: #35e07a;
+  border-color: #0d4023;
 }
 
 /* ---------------------------------------------------------- overlays */
@@ -457,6 +503,13 @@ body {
   color: #000000;
   background: #ffd400;
   border-color: #ffd400;
+}
+
+.field,
+.btn,
+.entity-row,
+.ptab {
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .entity-hint {
@@ -618,6 +671,10 @@ body {
   <footer id="footer">D-PAD Move &nbsp;&middot;&nbsp; OK Toggle &nbsp;&middot;&nbsp; BLUE Settings</footer>
 </div>
 
+<div id="toast" class="toast hidden" role="status" aria-live="polite">
+  <span id="toast-text"></span>
+</div>
+
 <div id="settings" class="overlay hidden">
   <div class="panel settings-panel">
     <div class="panel-title">Settings</div>
@@ -737,6 +794,15 @@ body {
 
   var el = {};
 
+  var pressed = -1;
+  var toastTimer = null;
+  var health = { offline: false, auth: false, wsDown: false };
+  var wsPending = {};
+  var wsFrame = null;
+  var raf = window.requestAnimationFrame
+    ? function (fn) { return window.requestAnimationFrame(fn); }
+    : function (fn) { return window.setTimeout(fn, 16); };
+
   function byId(id) {
     return document.getElementById(id);
   }
@@ -824,15 +890,15 @@ body {
 
   function valueFor(item) {
     if (isSensorEntity(item)) {
-      if (item.domain === 'binary_sensor') {
-        return binaryLabel(item);
-      }
       var s = item.state;
       if (s === undefined || s === null || s === '') {
         return '...';
       }
-      if (s === 'unknown' || s === 'unavailable') {
-        return String(s).toUpperCase();
+      if (s === '...' || s === 'unknown' || s === 'unavailable') {
+        return s === '...' ? '...' : String(s).toUpperCase();
+      }
+      if (item.domain === 'binary_sensor') {
+        return binaryLabel(item);
       }
       return formatSensorValue(item, s);
     }
@@ -1084,6 +1150,89 @@ body {
     el.statusText.textContent = text;
   }
 
+  function showToast(text, kind, duration) {
+    if (!el.toast || !el.toastText) {
+      return;
+    }
+    el.toastText.textContent = text;
+    el.toast.className = 'toast ' + (kind || 'warn');
+    if (toastTimer) {
+      window.clearTimeout(toastTimer);
+    }
+    toastTimer = window.setTimeout(function () {
+      toastTimer = null;
+      if (el.toast) {
+        el.toast.className = 'toast hidden';
+      }
+    }, duration || 4000);
+  }
+
+  function hideToast() {
+    if (toastTimer) {
+      window.clearTimeout(toastTimer);
+      toastTimer = null;
+    }
+    if (el.toast) {
+      el.toast.className = 'toast hidden';
+    }
+  }
+
+  function resetHealth() {
+    health = { offline: false, auth: false, wsDown: false };
+    hideToast();
+  }
+
+  function markOnline() {
+    if (health.wsDown) {
+      setStatus('reconnecting', 'RECONNECTING');
+    } else {
+      setStatus('online', 'ONLINE');
+    }
+    if (health.offline || health.auth) {
+      showToast('Connected to Home Assistant', 'ok');
+    }
+    health.offline = false;
+    health.auth = false;
+  }
+
+  function markOffline(message) {
+    setStatus('offline', 'OFFLINE');
+    if (!health.offline) {
+      showToast(message || 'Connection lost \u2014 retrying...', 'warn', 5000);
+    }
+    health.offline = true;
+  }
+
+  function markAuth() {
+    setStatus('auth', 'TOKEN ERR');
+    if (!health.auth) {
+      showToast('Token invalid \u2014 press BLUE to fix', 'error', 8000);
+    }
+    health.auth = true;
+  }
+
+  function markWsDown() {
+    if (health.wsDown) {
+      return;
+    }
+    health.wsDown = true;
+    if (!health.offline && !health.auth) {
+      setStatus('reconnecting', 'RECONNECTING');
+    }
+    showToast('Live updates reconnecting...', 'warn', 5000);
+  }
+
+  function markWsUp() {
+    if (!health.wsDown) {
+      return;
+    }
+    health.wsDown = false;
+    if (!health.offline && !health.auth) {
+      setStatus('online', 'ONLINE');
+    }
+    showToast('Live updates restored', 'ok');
+  }
+
   function modelFor(entityId) {
     var cached = entityCache[entityId];
     if (cached) {
@@ -1188,14 +1337,16 @@ body {
     }
     el.empty.classList.add('hidden');
 
+    var fragment = document.createDocumentFragment();
     var i;
     for (i = 0; i < config.entities.length; i++) {
       var item = modelFor(config.entities[i]);
       var refs = buildTile(item);
-      el.grid.appendChild(refs.tile);
+      fragment.appendChild(refs.tile);
       dash.items.push(item);
       dash.els.push(refs);
     }
+    el.grid.appendChild(fragment);
 
     var rows = Math.ceil(config.entities.length / COLS);
     if (rows > MAX_ROWS_BEFORE_SCROLL) {
@@ -1230,6 +1381,9 @@ body {
       }
       if (i === dash.focus) {
         cls += ' focused';
+      }
+      if (i === pressed) {
+        cls += ' pressed';
       }
       refs.tile.className = cls;
     }
@@ -1301,12 +1455,19 @@ body {
       return;
     }
 
+    var index = dash.focus;
     var prev = item.state;
     item.state = prev === 'on' ? 'off' : 'on';
-    updateTile(dash.focus);
+    pressed = index;
+    updateTile(index);
+    window.setTimeout(function () {
+      if (pressed === index) {
+        pressed = -1;
+        applyTileClasses();
+      }
+    }, 180);
 
     var myGen = gen;
-    var index = dash.focus;
 
     httpRequest({
       method: 'POST',
@@ -1317,7 +1478,7 @@ body {
         return;
       }
       if (status >= 200 && status < 300) {
-        setStatus('online', 'ONLINE');
+        markOnline();
         window.setTimeout(function () {
           if (myGen === gen) {
             refreshOne(index);
@@ -1326,7 +1487,12 @@ body {
       } else {
         item.state = prev;
         updateTile(index);
-        setStatus(status === 401 ? 'auth' : 'offline', status === 401 ? 'TOKEN ERR' : 'OFFLINE');
+        if (status === 401) {
+          markAuth();
+        } else {
+          markOffline();
+          showToast('Toggle failed \u2014 check connection', 'warn', 4000);
+        }
       }
     });
   }
@@ -1352,14 +1518,14 @@ body {
         var data = parseJson(text);
         if (data && data.entity_id) {
           applyModel(data, index);
-          setStatus('online', 'ONLINE');
+          markOnline();
           return;
         }
       }
       if (status === 401) {
-        setStatus('auth', 'TOKEN ERR');
+        markAuth();
       } else {
-        setStatus('offline', 'OFFLINE');
+        markOffline();
       }
     });
   }
@@ -1399,11 +1565,11 @@ body {
           }
           if (remaining === 0) {
             if (auth) {
-              setStatus('auth', 'TOKEN ERR');
+              markAuth();
             } else if (successes > 0) {
-              setStatus('online', 'ONLINE');
+              markOnline();
             } else if (network) {
-              setStatus('offline', 'OFFLINE');
+              markOffline();
             }
           }
         });
@@ -1440,6 +1606,14 @@ body {
       }
     }
     return points;
+  }
+
+  function formatChartValue(value) {
+    if (Math.abs(value) >= 1000) {
+      return String(Math.round(value));
+    }
+    var rounded = Math.round(value * 10) / 10;
+    return String(rounded);
   }
 
   function drawHistory(canvas, points) {
@@ -1520,6 +1694,11 @@ body {
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
     ctx.stroke();
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    ctx.font = '18px sans-serif';
+    ctx.fillText(formatChartValue(max), 6, 18);
+    ctx.fillText(formatChartValue(min), 6, h - 8);
   }
 
   function fetchHistory(index) {
@@ -1611,12 +1790,13 @@ body {
         socket.send(JSON.stringify({ type: 'auth', access_token: config.token }));
       } else if (msg.type === 'auth_ok') {
         wsOpen = true;
-        setStatus('online', 'ONLINE');
+        markWsUp();
+        markOnline();
         socket.send(JSON.stringify({ id: 1, type: 'subscribe_events', event_type: 'state_changed' }));
       } else if (msg.type === 'auth_invalid') {
         wsOpen = false;
         wsAuthFailed = true;
-        setStatus('auth', 'TOKEN ERR');
+        markAuth();
         try {
           socket.close();
         } catch (e2) {
@@ -1636,6 +1816,7 @@ body {
       if (myGen !== gen || wsAuthFailed) {
         return;
       }
+      markWsDown();
       scheduleWsRetry(myGen);
     };
 
@@ -1662,26 +1843,51 @@ body {
     if (!newState || !newState.entity_id) {
       return;
     }
-
-    var index = -1;
-    var i;
-    for (i = 0; i < dash.items.length; i++) {
-      if (dash.items[i] && dash.items[i].entity_id === newState.entity_id) {
-        index = i;
-        break;
-      }
+    wsPending[newState.entity_id] = newState;
+    if (!wsFrame) {
+      var frameGen = gen;
+      wsFrame = raf(function () {
+        flushWsEvents(frameGen);
+      });
     }
-    if (index === -1) {
+  }
+
+  function flushWsEvents(frameGen) {
+    wsFrame = null;
+    if (frameGen !== gen) {
+      wsPending = {};
       return;
     }
 
-    var model = modelFromState(newState);
-    entityCache[model.entity_id] = model;
-    dash.items[index] = model;
-    updateTile(index);
-    setStatus('online', 'ONLINE');
+    var touchedSensor = false;
+    var id;
+    for (id in wsPending) {
+      if (!wsPending.hasOwnProperty(id)) {
+        continue;
+      }
+      var index = -1;
+      var i;
+      for (i = 0; i < dash.items.length; i++) {
+        if (dash.items[i] && dash.items[i].entity_id === id) {
+          index = i;
+          break;
+        }
+      }
+      if (index === -1) {
+        continue;
+      }
+      var model = modelFromState(wsPending[id]);
+      entityCache[model.entity_id] = model;
+      dash.items[index] = model;
+      updateTile(index);
+      if (model.domain === 'sensor') {
+        touchedSensor = true;
+      }
+    }
 
-    if (model.domain === 'sensor') {
+    wsPending = {};
+    markOnline();
+    if (touchedSensor) {
       scheduleHistoryRefresh();
     }
   }
@@ -1710,6 +1916,8 @@ body {
 
     wsOpen = false;
     wsAuthFailed = false;
+    wsPending = {};
+    wsFrame = null;
     if (ws) {
       var socket = ws;
       ws = null;
@@ -1723,6 +1931,8 @@ body {
 
   function applyDashboard() {
     stopLive();
+    resetHealth();
+    pressed = -1;
     buildGrid();
 
     if (config.token && config.entities.length) {
@@ -1791,6 +2001,7 @@ body {
 
   function openSettings() {
     settings.open = true;
+    hideToast();
     settings.view = 'connection';
     settings.focus = 0;
     settings.connecting = false;
@@ -2491,6 +2702,8 @@ body {
     el.saveEntities = byId('save-entities');
     el.tabToggles = byId('tab-toggles');
     el.tabSensors = byId('tab-sensors');
+    el.toast = byId('toast');
+    el.toastText = byId('toast-text');
 
     keyboard = new Keyboard();
     collectConnFields();
