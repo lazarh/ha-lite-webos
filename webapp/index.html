@@ -231,21 +231,24 @@ body {
 
 .sensor-tile .name {
   margin-top: 14px;
-  max-height: 64px;
-  font-size: 30px;
+  max-height: 68px;
+  font-size: 28px;
 }
 
 .sensor-readout {
   margin-top: auto;
   display: flex;
   align-items: baseline;
+  overflow: hidden;
 }
 
 .sensor-readout .value {
   margin-top: 0;
-  font-size: 60px;
+  font-size: 58px;
   line-height: 1;
   color: #31d7ff;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 .sensor-readout .unit {
@@ -510,9 +513,13 @@ body {
 
 .row-meta {
   flex: 0 0 auto;
+  max-width: 420px;
   margin-left: 18px;
   font-size: 20px;
   color: #8a8a8a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #save-entities {
@@ -784,8 +791,35 @@ body {
       state: data.state,
       unit: attrs.unit_of_measurement || '',
       deviceClass: attrs.device_class || '',
-      stateClass: attrs.state_class || ''
+      stateClass: attrs.state_class || '',
+      precision: attrs.suggested_display_precision
     };
+  }
+
+  function formatSensorValue(item, value) {
+    var text = String(value === undefined || value === null ? '' : value);
+    if (!/^-?\d+(\.\d+)?$/.test(text)) {
+      return text;
+    }
+
+    var number = parseFloat(text);
+    if (isNaN(number) || !isFinite(number)) {
+      return text;
+    }
+
+    var precision = item.precision;
+    if (precision !== undefined && precision !== null && precision !== '') {
+      var p = parseInt(precision, 10);
+      if (!isNaN(p) && p >= 0 && p <= 4) {
+        return number.toFixed(p);
+      }
+    }
+
+    if (Math.abs(number) >= 1000) {
+      return String(Math.round(number));
+    }
+    var rounded = Math.round(number * 10) / 10;
+    return String(rounded);
   }
 
   function valueFor(item) {
@@ -800,7 +834,7 @@ body {
       if (s === 'unknown' || s === 'unavailable') {
         return String(s).toUpperCase();
       }
-      return s;
+      return formatSensorValue(item, s);
     }
     if (item.state === 'on') {
       return 'ON';
@@ -1060,7 +1094,8 @@ body {
         state: cached.state,
         unit: cached.unit,
         deviceClass: cached.deviceClass,
-        stateClass: cached.stateClass
+        stateClass: cached.stateClass,
+        precision: cached.precision
       };
     }
     return {
@@ -1070,7 +1105,8 @@ body {
       state: '...',
       unit: '',
       deviceClass: '',
-      stateClass: ''
+      stateClass: '',
+      precision: undefined
     };
   }
 
@@ -1996,7 +2032,8 @@ body {
       name.textContent = item.name;
 
       var meta = span('row-meta');
-      meta.textContent = item.domain + ' \u00b7 ' + item.state;
+      meta.textContent = item.domain + ' \u00b7 ' + valueFor(item) +
+        (unitFor(item) ? ' ' + unitFor(item) : '');
 
       row.appendChild(chk);
       row.appendChild(name);
