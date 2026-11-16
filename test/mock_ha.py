@@ -17,30 +17,64 @@ import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse
 
-ENTITY_ID = "switch.esphome_web_e4c400_3d_auto"
-FRIENDLY_NAME = "Bedroom 3 e4c400 3D Auto"
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEBAPP = os.path.join(ROOT, "webapp", "index.html")
 
-STATE = {"state": "on"}
+ENTITY_DATA = {
+    "switch.esphome_web_e4c400_3d_auto": {
+        "state": "on",
+        "attributes": {"friendly_name": "Bedroom 3 e4c400 3D Auto"},
+    },
+    "switch.shellyplugsg3_coffee_machine": {
+        "state": "off",
+        "attributes": {"friendly_name": "Coffee machine"},
+    },
+    "switch.sonoff_water_pump": {
+        "state": "off",
+        "attributes": {"friendly_name": "Water pump"},
+    },
+    "switch.desk_lamp": {
+        "state": "on",
+        "attributes": {"friendly_name": "Desk Lamp"},
+    },
+    "light.living_room": {
+        "state": "on",
+        "attributes": {"friendly_name": "Living Room Light"},
+    },
+    "light.kitchen": {
+        "state": "off",
+        "attributes": {"friendly_name": "Kitchen Light"},
+    },
+    "input_boolean.guest_mode": {
+        "state": "off",
+        "attributes": {"friendly_name": "Guest Mode"},
+    },
+    "sensor.temperature": {
+        "state": "21.4",
+        "attributes": {"friendly_name": "Temperature", "unit_of_measurement": "\u00b0C"},
+    },
+    "binary_sensor.front_door": {
+        "state": "off",
+        "attributes": {"friendly_name": "Front Door"},
+    },
+}
+
 CONFIG = {"token": "demo-token"}
 
 
-def entity_payload():
+def state_payload(entity_id):
+    entry = ENTITY_DATA[entity_id]
     return {
-        "entity_id": ENTITY_ID,
-        "state": STATE["state"],
-        "attributes": {
-            "friendly_name": FRIENDLY_NAME,
-        },
+        "entity_id": entity_id,
+        "state": entry["state"],
+        "attributes": dict(entry["attributes"]),
         "last_changed": "2026-01-01T00:00:00+00:00",
         "last_updated": "2026-01-01T00:00:00+00:00",
     }
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "MockHA/1.0"
+    server_version = "MockHA/1.1"
 
     def log_message(self, fmt, *args):
         sys.stderr.write("[mock-ha] %s %s\n" % (self.client_address[0], fmt % args))
@@ -61,7 +95,6 @@ class Handler(BaseHTTPRequestHandler):
         self._send(401, json.dumps({"message": "Unauthorized"}))
 
     def do_OPTIONS(self):
-        # Not needed for same-origin requests, but harmless during development.
         self.send_response(204)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
@@ -89,24 +122,44 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, "API running.", "text/plain; charset=utf-8")
             return
 
-        if path == "/api/states/" + ENTITY_ID:
+        if path == "/api/states":
             if not self._authorized():
                 self._deny()
                 return
-            self._send(200, json.dumps(entity_payload()))
+            self._send(200, json.dumps([state_payload(eid) for eid in ENTITY_DATA]))
+            return
+
+        prefix = "/api/states/"
+        if path.startswith(prefix):
+            if not self._authorized():
+                self._deny()
+                return
+            entity_id = path[len(prefix):]
+            if entity_id in ENTITY_DATA:
+                self._send(200, json.dumps(state_payload(entity_id)))
+            else:
+                self._send(404, json.dumps({"message": "Entity not found"}))
             return
 
         self._send(404, json.dumps({"message": "Not found"}))
 
     def do_POST(self):
         path = urlparse(self.path).path
+        parts = path.strip("/").split("/")
 
-        if path != "/api/services/switch/toggle":
+        # /api/services/<domain>/<service>  (homeassistant/toggle is the one we use)
+        if len(parts) != 4 or parts[0] != "api" or parts[1] != "services":
             self._send(404, json.dumps({"message": "Not found"}))
             return
 
         if not self._authorized():
             self._deny()
+            return
+
+        domain = parts[2]
+        service = parts[3]
+        if service != "toggle" or domain not in ("homeassistant", "switch", "light", "input_boolean"):
+            self._send(404, json.dumps({"message": "Service not found"}))
             return
 
         length = int(self.headers.get("Content-Length", "0") or "0")
@@ -116,11 +169,16 @@ class Handler(BaseHTTPRequestHandler):
         except (ValueError, UnicodeDecodeError):
             payload = {}
 
-        if payload.get("entity_id") == ENTITY_ID:
-            STATE["state"] = "off" if STATE["state"] == "on" else "on"
-            sys.stderr.write("[mock-ha] toggled %s -> %s\n" % (ENTITY_ID, STATE["state"]))
+        entity_id = payload.get("entity_id", "")
+        if entity_id in ENTITY_DATA:
+            current = ENTITY_DATA[entity_id]["state"]
+            ENTITY_DATA[entity_id]["state"] = "off" if current == "on" else "on"
+            sys.stderr.write("[mock-ha] toggled %s -> %s\n"
+                             % (entity_id, ENTITY_DATA[entity_id]["state"]))
+            self._send(200, json.dumps([state_payload(entity_id)]))
+            return
 
-        self._send(200, json.dumps([entity_payload()]))
+        self._send(200, "[]")
 
 
 def main():
