@@ -1,7 +1,7 @@
 #!/bin/sh
-# HA Lite Phase 2 smoke test.
-# Verifies: ES5 syntax, same-origin app serving, entity list, toggle,
-# first-run settings render, and a configured multi-tile dashboard render.
+# HA Lite Phase 3 smoke test.
+# Verifies: ES5 syntax, same-origin app serving, entity list, history,
+# WebSocket auth + pushed state, toggle, and a configured sensor/switch render.
 
 set -eu
 
@@ -68,13 +68,18 @@ wait_for "$BASE" || { echo "mock server did not start" >&2; cat "$TMP/mock.log" 
 echo "== app is served same-origin =="
 curl -fsS "$BASE/local/halite/index.html" | grep -q 'id="grid"'
 
-echo "== entity list includes toggleable domains =="
+echo "== entity list includes toggles and sensors =="
 curl -fsS -H "Authorization: Bearer $TOKEN" "$BASE/api/states" \
-  | python3 -c 'import sys, json; d = json.load(sys.stdin); domains = set(x["entity_id"].split(".")[0] for x in d); assert {"switch", "light", "input_boolean"} <= domains, domains; print("domains:", ",".join(sorted(domains)))'
+  | python3 -c 'import sys, json; d = json.load(sys.stdin); domains = set(x["entity_id"].split(".")[0] for x in d); assert {"switch", "light", "input_boolean", "sensor", "binary_sensor"} <= domains, domains; print("domains:", ",".join(sorted(domains)))'
 
 echo "== unauthenticated read is rejected =="
 code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/states")
 [ "$code" = "401" ] || { echo "expected 401, got $code" >&2; exit 1; }
+
+echo "== history endpoint =="
+curl -fsS -H "Authorization: Bearer $TOKEN" \
+  "$BASE/api/history/period/2026-01-01T00:00:00Z?filter_entity_id=sensor.living_room_temperature&minimal_response" \
+  | python3 -c 'import sys, json; d = json.load(sys.stdin); assert d and len(d[0]) > 10, "short history"; print("history points:", len(d[0]))'
 
 echo "== toggle via homeassistant.toggle =="
 start_state=$(curl -fsS -H "Authorization: Bearer $TOKEN" "$BASE/api/states/switch.desk_lamp" \
@@ -87,6 +92,42 @@ end_state=$(curl -fsS -H "Authorization: Bearer $TOKEN" "$BASE/api/states/switch
 [ "$start_state" != "$end_state" ] || { echo "state did not change" >&2; exit 1; }
 echo "toggled: $start_state -> $end_state"
 
+echo "== websocket auth + pushed state_changed =="
+if python3 -c 'import websockets' >/dev/null 2>&1; then
+  python3 - "$PORT" "$TOKEN" <<'PY'
+import asyncio
+import json
+import sys
+
+import websockets
+
+port = int(sys.argv[1])
+token = sys.argv[2]
+
+
+async def main():
+    async with websockets.connect("ws://127.0.0.1:%d/api/websocket" % port) as ws:
+        first = json.loads(await ws.recv())
+        assert first.get("type") == "auth_required", first
+        await ws.send(json.dumps({"type": "auth", "access_token": token}))
+        auth = json.loads(await ws.recv())
+        assert auth.get("type") == "auth_ok", auth
+        await ws.send(json.dumps({"id": 1, "type": "subscribe_events", "event_type": "state_changed"}))
+        result = json.loads(await ws.recv())
+        assert result.get("success") is True, result
+        event = json.loads(await asyncio.wait_for(ws.recv(), timeout=6))
+        assert event.get("type") == "event", event
+        entity = event["event"]["data"]["entity_id"]
+        state = event["event"]["data"]["new_state"]["state"]
+        print("ws event:", entity, "=", state)
+
+
+asyncio.run(main())
+PY
+else
+  echo "websockets module not available - skipping WS check" >&2
+fi
+
 if command -v chromium >/dev/null 2>&1; then
   echo "== first-run render (settings overlay) =="
   chromium --headless --no-sandbox --disable-gpu --hide-scrollbars \
@@ -96,7 +137,7 @@ if command -v chromium >/dev/null 2>&1; then
   grep -q "http://127.0.0.1:$PORT" "$TMP/dom1.html"
   echo "settings overlay opened with origin URL"
 
-  echo "== configured dashboard render (three tiles) =="
+  echo "== configured render (switches + sensor chart + binary sensor) =="
   python3 - "$TMP/seeded.html" <<'PY'
 import sys
 
@@ -107,7 +148,8 @@ try {
   localStorage.setItem('halite.config.v1', JSON.stringify({
     url: window.location.origin,
     token: 'demo-token',
-    entities: ['switch.desk_lamp', 'light.living_room', 'input_boolean.guest_mode']
+    entities: ['switch.desk_lamp', 'light.living_room',
+               'sensor.living_room_temperature', 'binary_sensor.front_door']
   }));
 } catch (e) {}
 </script>
@@ -120,14 +162,15 @@ PY
   wait_for "$BASE2" || { echo "second mock did not start" >&2; cat "$TMP/mock2.log" >&2; exit 1; }
 
   chromium --headless --no-sandbox --disable-gpu --hide-scrollbars \
-    --user-data-dir="$TMP/profile2" --window-size=1920,1080 --virtual-time-budget=5000 \
+    --user-data-dir="$TMP/profile2" --window-size=1920,1080 --virtual-time-budget=6000 \
     --dump-dom "$BASE2/local/halite/index.html" 2>/dev/null >"$TMP/dom2.html"
-  [ "$(grep -o 'class="tile' "$TMP/dom2.html" | wc -l)" -eq 3 ]
+  [ "$(grep -o 'class="tile' "$TMP/dom2.html" | wc -l)" -eq 4 ]
+  grep -q 'class="spark"' "$TMP/dom2.html"
   grep -q 'Desk Lamp' "$TMP/dom2.html"
-  grep -q 'Living Room Light' "$TMP/dom2.html"
-  grep -q 'Guest Mode' "$TMP/dom2.html"
+  grep -q 'Living Room Temperature' "$TMP/dom2.html"
+  grep -q 'Front Door' "$TMP/dom2.html"
   grep -q 'id="settings" class="overlay hidden"' "$TMP/dom2.html"
-  echo "three configured tiles rendered"
+  echo "four tiles rendered (including sensor canvas)"
 else
   echo "chromium not found - skipping render checks" >&2
 fi
