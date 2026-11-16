@@ -110,9 +110,9 @@ Home Assistant API, so there is no `config/www` copying and no CORS setup.
    no prebuilt image is needed).
 
 3. Set the add-on **token** in its **Configuration** tab (it is the only option).
-4. **Start** the add-on, then open its configuration from Home Assistant: the
-   **HA Lite** panel in the sidebar, or the add-on's **Open Web UI** button.
-   Both open `http://<your-ha-host>:8099/?config=1`.
+4. **Start** the add-on, then open its configuration: Home Assistant ->
+   Settings -> Add-ons -> HA Lite -> **Open Web UI** (or
+   `http://<your-ha-host>:8099/?config=1`).
 
    Search and tick real entities, set a title, pick a theme
    (Amber / Blue / Emerald / Rose) and a layout (auto-fit / large / small),

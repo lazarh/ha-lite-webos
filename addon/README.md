@@ -7,10 +7,9 @@ is nothing to copy into `config/www` and no CORS configuration.
 ## Configuration
 
 The **token** is set in the add-on options (masked). Everything else is edited
-on the configuration page, reachable three ways:
+on the configuration page:
 
-- the **HA Lite** panel in Home Assistant's sidebar (add-on ingress), or
-- the add-on's **Open Web UI** button, or
+- Home Assistant -> Settings -> Add-ons -> HA Lite -> **Open Web UI**, or
 - `http://<your-ha-host>:8099/?config=1`
 
 There you can:
