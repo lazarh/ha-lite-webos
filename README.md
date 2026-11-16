@@ -33,6 +33,10 @@ files under `/local/` are public).
 - Sensor tiles for `sensor` and `binary_sensor`: device-class SVG icon, large
   value + unit, and a 24-hour Canvas sparkline
 - **WebSocket live updates** (`state_changed`), with a 10 s REST poll fallback
+- Connection feedback: a RECONNECTING pill state plus auto-dismissing toasts for
+  lost/recovered connections and failed toggles; persistent hint on token errors
+- Smooth focus (scale + glow) and a brief press state on OK; chart min/max labels
+  and overscan-safe margins for 10-foot readability
 - D-pad configuration: URL (defaults to the page origin), token via a custom
   on-screen keyboard, and a two-tab picker (Toggles / Sensors)
 - Up to 12 tiles; selection persists in `localStorage` across app restarts
@@ -52,7 +56,7 @@ files under `/local/` are public).
 ### Optional: seed the token from a URL
 
 ```
-http://<ha-host>:8123/local/halite/index.html?v=0.3.1#<long-lived-token>
+http://<ha-host>:8123/local/halite/index.html?v=0.4.0#<long-lived-token>
 ```
 
 The fragment is stored locally and stripped from the address bar.
@@ -86,7 +90,7 @@ Desktop shortcuts: arrows, Enter, `B`/`S` for BLUE, `Esc` to close.
 
    ```sh
    ares-package launcher -o dist
-   ares-install --device tv dist/com.halite.dashboard_0.3.1_all.ipk
+   ares-install --device tv dist/com.halite.dashboard_0.4.0_all.ipk
    ares-launch --device tv com.halite.dashboard
    ```
 
@@ -125,6 +129,9 @@ on one port, and pushes two live events after subscription.
 - [ ] Selecting switches and sensors and saving renders the tiles
 - [ ] Sensor tiles show icon, value, unit and a 24 h sparkline
 - [ ] Live WebSocket updates change tiles without waiting for the poll
+- [ ] A dropped link shows RECONNECTING/a toast; recovery clears it with feedback
+- [ ] Toggling while offline reverts the tile and shows a failure toast
+- [ ] Focus ring/scale is clearly visible across the room; chart min/max labels readable
 - [ ] Closing and relaunching the app keeps the configuration
 - [ ] Wrong token shows TOKEN ERR; stopping HA shows OFFLINE
 
@@ -161,3 +168,9 @@ views, arbitrary cross-origin servers, theming.
 - **24-hour chart window** (per choice) and a **two-tab picker**.
 - **Tiles are capped at 12** to protect low-memory TV hardware; the picker shows
   the count.
+- **The high-contrast dark theme is retained** rather than mirroring Home
+  Assistant Lovelace's light cards: the brief calls for 10-foot readability and
+  the dark/amber/cyan palette is markedly easier to read across a room.
+- **Only one physical webOS 3.x model was available** for device testing; the
+  other-model requirement is covered by the Chromium 38 ES5 gate and the mock
+  server rather than multiple TVs.
