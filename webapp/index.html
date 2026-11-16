@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HA Lite</title>
+<style>
+/* HA Lite Phase 1 - single switch tile.
+   Target: LG webOS 3.x, Chromium 38. ES5 only, same-origin REST.
+   Deliberately avoids CSS grid, custom properties, flexbox gap and animations. */
+
+html {
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: #f2f2f2;
+  font-family: "LG Smart UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+.hidden {
+  display: none !important;
+}
+
+#stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ------------------------------------------------------------ top bar */
+
+#topbar {
+  height: 116px;
+  box-sizing: border-box;
+  padding: 28px 56px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#brand {
+  font-size: 42px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #ffffff;
+}
+
+#brand .accent {
+  color: #ffd400;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  height: 46px;
+  padding: 0 22px;
+  border: 2px solid #333333;
+  border-radius: 23px;
+  background: #0a0a0a;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #9a9a9a;
+}
+
+.status .dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 7px;
+  background: #777777;
+  margin-right: 12px;
+}
+
+.status.loading,
+.status.auth,
+.status.noconfig {
+  color: #ff9f1a;
+  border-color: #4a2f00;
+}
+
+.status.loading .dot,
+.status.auth .dot,
+.status.noconfig .dot {
+  background: #ff9f1a;
+}
+
+.status.online {
+  color: #35e07a;
+  border-color: #0d4023;
+}
+
+.status.online .dot {
+  background: #35e07a;
+}
+
+.status.offline {
+  color: #ff4d4d;
+  border-color: #4a0d0d;
+}
+
+.status.offline .dot {
+  background: #ff4d4d;
+}
+
+/* ------------------------------------------------------------- tile */
+
+#main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  box-sizing: border-box;
+}
+
+.tile {
+  position: relative;
+  box-sizing: border-box;
+  width: 760px;
+  height: 460px;
+  padding: 44px 48px;
+  display: flex;
+  flex-direction: column;
+  background: #0e0e0e;
+  border: 3px solid #262626;
+  border-radius: 22px;
+  color: #f2f2f2;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.tile.focused {
+  box-shadow: 0 0 0 8px #29d6ff, 0 24px 80px rgba(0, 0, 0, 0.7);
+}
+
+.tile.on {
+  background: #ffd400;
+  border-color: #ffd400;
+  color: #000000;
+}
+
+.badge {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #8f8f8f;
+}
+
+.tile.on .badge {
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.name {
+  margin-top: 42px;
+  font-size: 48px;
+  font-weight: 600;
+  line-height: 1.15;
+  overflow: hidden;
+}
+
+.value {
+  margin-top: auto;
+  font-size: 110px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  line-height: 1;
+  word-break: break-word;
+}
+
+.entity {
+  margin-top: 14px;
+  font-size: 20px;
+  color: #5a5a5a;
+  word-break: break-all;
+}
+
+.tile.on .entity {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+#footer {
+  height: 70px;
+  padding-bottom: 18px;
+  box-sizing: border-box;
+  text-align: center;
+  font-size: 21px;
+  letter-spacing: 2px;
+  color: #7c7c7c;
+}
+
+/* ----------------------------------------------------- token notice */
+
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 50;
+}
+
+.notice-panel {
+  width: 1040px;
+  max-height: 92%;
+  box-sizing: border-box;
+  padding: 40px 48px;
+  background: #0a0a0a;
+  border: 2px solid #333333;
+  border-radius: 20px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.8);
+}
+
+.panel-title {
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #ffd400;
+}
+
+.panel-body {
+  margin-top: 22px;
+  font-size: 26px;
+  line-height: 1.4;
+  color: #d8d8d8;
+}
+
+.panel-body.small {
+  margin-top: 18px;
+  font-size: 22px;
+  color: #9a9a9a;
+}
+
+.panel-url {
+  margin-top: 18px;
+  padding: 18px 22px;
+  box-sizing: border-box;
+  font-size: 24px;
+  color: #31d7ff;
+  background: #051418;
+  border: 2px solid #123a44;
+  border-radius: 12px;
+  word-break: break-all;
+}
+
+.code {
+  color: #ffd400;
+}
+</style>
+</head>
+<body>
+<div id="stage">
+  <header id="topbar">
+    <div id="brand">HA <span class="accent">LITE</span></div>
+    <div id="status" class="status loading" aria-live="polite">
+      <span class="dot"></span><span id="status-text">LOADING</span>
+    </div>
+  </header>
+
+  <main id="main">
+    <div id="tile" class="tile focused" aria-live="polite">
+      <div class="badge">SWITCH</div>
+      <div class="name" id="tile-name">Bedroom 3 e4c400 3D Auto</div>
+      <div class="value" id="tile-value">...</div>
+      <div class="entity" id="tile-entity">switch.esphome_web_e4c400_3d_auto</div>
+    </div>
+  </main>
+
+  <footer id="footer">OK Toggle &nbsp;&middot;&nbsp; HA Lite</footer>
+</div>
+
+<div id="notice" class="overlay hidden">
+  <div class="notice-panel">
+    <div class="panel-title">Token required</div>
+    <div class="panel-body">
+      Open this page once with a long-lived Home Assistant token appended to the URL:
+    </div>
+    <div class="panel-url" id="notice-url">this page</div>
+    <div class="panel-body small">
+      Append <span class="code">#&lt;token&gt;</span> to the address above. The token is stored
+      on the TV and removed from the address bar. Create one in Home Assistant under
+      Profile &rarr; Long-lived access tokens.
+    </div>
+  </div>
+</div>
+
+<script>
+(function (window, document, undefined) {
+  'use strict';
+
+  /* ------------------------------------------------------------ config */
+
+  var CONFIG = {
+    /* The single switch rendered in Phase 1. */
+    entityId: 'switch.esphome_web_e4c400_3d_auto',
+    fallbackName: 'Bedroom 3 e4c400 3D Auto',
+    /* Where the long-lived token is persisted on the TV. */
+    tokenStorageKey: 'halite.token',
+    /* Re-read the switch state periodically (no WebSocket in Phase 1). */
+    pollSeconds: 10
+  };
+
+  var state = {
+    token: '',
+    entity: null,
+    status: 'loading',
+    busy: false
+  };
+
+  var el = {};
+
+  function byId(id) {
+    return document.getElementById(id);
+  }
+
+  /* -------------------------------------------------------- rendering */
+
+  function setStatus(kind, text) {
+    state.status = kind;
+    el.status.className = 'status ' + kind;
+    el.statusText.textContent = text;
+  }
+
+  function applyTile() {
+    var name = CONFIG.fallbackName;
+    var value = '...';
+    var on = false;
+
+    if (state.entity) {
+      name = state.entity.name || CONFIG.fallbackName;
+      value = state.entity.state === 'on'
+        ? 'ON'
+        : (state.entity.state === 'off' ? 'OFF' : String(state.entity.state).toUpperCase());
+      on = state.entity.state === 'on';
+    } else if (state.status === 'auth') {
+      value = 'AUTH';
+    } else if (state.status === 'offline') {
+      value = 'OFFLINE';
+    } else if (state.status === 'noconfig') {
+      value = 'NO TOKEN';
+    }
+
+    el.name.textContent = name;
+    el.value.textContent = value;
+    el.tile.className = 'tile focused' + (on ? ' on' : '');
+  }
+
+  /* --------------------------------------------------------- http */
+
+  function request(method, path, body, callback) {
+    var called = false;
+
+    function finish(status, text) {
+      if (called) {
+        return;
+      }
+      called = true;
+      callback(status, text);
+    }
+
+    var xhr = new XMLHttpRequest();
+    try {
+      xhr.open(method, path, true);
+    } catch (e) {
+      finish(0, '');
+      return;
+    }
+
+    xhr.timeout = 8000;
+    try {
+      xhr.setRequestHeader('Authorization', 'Bearer ' + state.token);
+      if (body) {
+        xhr.setRequestHeader('Content-Type', 'application/json');
+      }
+    } catch (e2) {
+      /* ignore: headers can only be set after open() */
+    }
+
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) {
+        return;
+      }
+      var status = 0;
+      var text = '';
+      try {
+        status = xhr.status;
+      } catch (e3) {
+        status = 0;
+      }
+      try {
+        text = xhr.responseText || '';
+      } catch (e4) {
+        text = '';
+      }
+      finish(status, text);
+    };
+    xhr.onerror = function () {
+      finish(0, '');
+    };
+    xhr.ontimeout = function () {
+      finish(0, '');
+    };
+
+    try {
+      xhr.send(body ? JSON.stringify(body) : null);
+    } catch (e5) {
+      finish(0, '');
+    }
+  }
+
+  /* ---------------------------------------------------------- state */
+
+  function loadState() {
+    if (!state.token) {
+      return;
+    }
+
+    request('GET', '/api/states/' + encodeURIComponent(CONFIG.entityId), null, function (status, text) {
+      if (status === 200) {
+        var data = null;
+        try {
+          data = JSON.parse(text);
+        } catch (e) {
+          data = null;
+        }
+        if (data && data.entity_id) {
+          var attrs = data.attributes || {};
+          state.entity = {
+            entity_id: data.entity_id,
+            state: data.state,
+            name: attrs.friendly_name || CONFIG.fallbackName
+          };
+          setStatus('online', 'ONLINE');
+          applyTile();
+          return;
+        }
+      }
+
+      if (status === 401) {
+        setStatus('auth', 'TOKEN ERR');
+      } else if (status === 404) {
+        setStatus('offline', 'NOT FOUND');
+      } else {
+        setStatus('offline', 'OFFLINE');
+      }
+      applyTile();
+    });
+  }
+
+  function toggle() {
+    if (!state.token || !state.entity || state.busy) {
+      return;
+    }
+
+    var prev = state.entity.state;
+    var next = prev === 'on' ? 'off' : 'on';
+
+    state.busy = true;
+    state.entity.state = next;
+    applyTile();
+
+    request('POST', '/api/services/switch/toggle', { entity_id: CONFIG.entityId }, function (status) {
+      state.busy = false;
+
+      if (status >= 200 && status < 300) {
+        setStatus('online', 'ONLINE');
+        /* Confirm against the server shortly after the service call. */
+        window.setTimeout(loadState, 500);
+      } else {
+        state.entity.state = prev;
+        applyTile();
+        if (status === 401) {
+          setStatus('auth', 'TOKEN ERR');
+        } else {
+          setStatus('offline', 'OFFLINE');
+        }
+      }
+    });
+  }
+
+  /* ---------------------------------------------------------- input */
+
+  function onKeyDown(event) {
+    if (event.keyCode === 13) {
+      event.preventDefault();
+      toggle();
+    }
+  }
+
+  /* ---------------------------------------------------------- token */
+
+  function readToken() {
+    var hash = window.location.hash || '';
+    if (hash.length > 1) {
+      var raw = hash.substring(1);
+      if (raw.length > 5) {
+        try {
+          window.localStorage.setItem(CONFIG.tokenStorageKey, raw);
+        } catch (e) {
+          /* storage may be unavailable */
+        }
+        try {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch (e2) {
+          /* ignore */
+        }
+        return raw;
+      }
+    }
+
+    try {
+      return window.localStorage.getItem(CONFIG.tokenStorageKey) || '';
+    } catch (e3) {
+      return '';
+    }
+  }
+
+  /* ----------------------------------------------------------- boot */
+
+  function init() {
+    el.status = byId('status');
+    el.statusText = byId('status-text');
+    el.tile = byId('tile');
+    el.name = byId('tile-name');
+    el.value = byId('tile-value');
+    el.notice = byId('notice');
+    el.noticeUrl = byId('notice-url');
+
+    document.addEventListener('keydown', onKeyDown, false);
+
+    state.token = readToken();
+
+    if (!state.token) {
+      setStatus('noconfig', 'NO TOKEN');
+      el.noticeUrl.textContent = window.location.href.split('#')[0];
+      el.notice.classList.remove('hidden');
+      applyTile();
+      return;
+    }
+
+    setStatus('loading', 'LOADING');
+    applyTile();
+    loadState();
+    window.setInterval(loadState, CONFIG.pollSeconds * 1000);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, false);
+  } else {
+    init();
+  }
+})(window, document);
+</script>
+</body>
+</html>
