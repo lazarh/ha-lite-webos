@@ -56,7 +56,7 @@ files under `/local/` are public).
 ### Optional: seed the token from a URL
 
 ```
-http://<ha-host>:8123/local/halite/index.html?v=0.4.0#<long-lived-token>
+http://<your-ha-host>:8123/local/halite/index.html?v=0.4.0#<long-lived-token>
 ```
 
 The fragment is stored locally and stripped from the address bar.
@@ -72,29 +72,107 @@ The fragment is stored locally and stripped from the address bar.
 
 Desktop shortcuts: arrows, Enter, `B`/`S` for BLUE, `Esc` to close.
 
-## Deploy
+## Installation
 
-1. **Copy the web app to Home Assistant**
+### Requirements
+
+- Home Assistant reachable from the TV on your local network, with the
+  `config/www` folder available (it exists by default).
+- An LG TV running webOS 3.x on the same network, with **Developer Mode**
+  enabled (LG Developer Mode app + a free LG developer account).
+- A computer with Node.js and the webOS CLI:
+
+  ```sh
+  npm install -g @webosose/ares-cli
+  ```
+
+### Part A — deploy the Home Assistant side
+
+The app must be served by Home Assistant itself, on the same origin as its API
+(that is what avoids CORS).
+
+1. Create the folder and copy the app there:
 
    ```sh
-   ssh root@<ha-host> 'mkdir -p /config/www/halite'
-   scp webapp/index.html root@<ha-host>:/config/www/halite/index.html
+   ssh root@<your-ha-host> 'mkdir -p /config/www/halite'
+   scp webapp/index.html root@<your-ha-host>:/config/www/halite/index.html
    ```
 
-   Verify `http://<ha-host>:8123/local/halite/index.html` returns the page.
+   No SSH? Use the **Samba share** add-on or the **File editor / Studio Code
+   Server** add-on and upload `webapp/index.html` to `config/www/halite/`.
 
-   Home Assistant caches `/local/` files for 31 days. When you update the app,
-   bump the `?v=` query in `launcher/index.html` (and reload) to bust the cache.
+2. Verify it loads from any device on the same network:
 
-2. **Package and install the launcher**
+   ```
+   http://<your-ha-host>:8123/local/halite/index.html
+   ```
+
+3. Create a **long-lived access token**: Home Assistant -> your profile ->
+   **Security** -> **Long-lived access tokens** -> create token. Copy it
+   somewhere safe; you will enter it on the TV.
+
+### Part B — build and install the TV launcher
+
+1. Enable **Developer Mode** on the TV (LG Content Store -> Developer Mode),
+   sign in with an LG developer account, enable it, and reboot. Note the TV's IP
+   and the passphrase shown in the app.
+
+2. Register the TV with the webOS CLI:
 
    ```sh
-   ares-package launcher -o dist
+   ares-setup-device --add tv \
+     --info "host=<tv-ip>" \
+     --info "port=9922" \
+     --info "username=prisoner" \
+     --info "password=<developer-mode-passphrase>"
+   ```
+
+3. Build the launcher with **your** Home Assistant URL:
+
+   ```sh
+   LAUNCH_URL="http://<your-ha-host>:8123/local/halite/index.html?v=0.4.0" ./package.sh
+   ```
+
+   This produces `dist/com.halite.dashboard_0.4.0_all.ipk` using only `ar` and
+   `tar` (no LG SDK required). The URL is baked in at build time, so every
+   installation builds its own IPK.
+
+4. Install and launch:
+
+   ```sh
    ares-install --device tv dist/com.halite.dashboard_0.4.0_all.ipk
    ares-launch --device tv com.halite.dashboard
    ```
 
-3. Set `LAUNCH_URL` in `launcher/index.html` if your host or path differs.
+   If you have the SDK, `ares-package launcher -o dist` also works after setting
+   `LAUNCH_URL` in `launcher/index.html`.
+
+### First run
+
+The app opens **Settings** automatically. Enter the token with the D-pad
+keyboard, choose **Connect & choose tiles**, pick entities, and save. The token
+is stored only on the TV.
+
+Optional: seed the token once via the URL fragment
+`.../index.html?v=0.4.0#<token>` instead of typing it; it is stored and then
+stripped from the address bar.
+
+### Updating
+
+1. Replace `webapp/index.html` on Home Assistant.
+2. Bump the `?v=` value in your `LAUNCH_URL` (Home Assistant caches `/local/`
+   files for 31 days) and rebuild the launcher, or open the new `?v=` URL.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| TV shows OFFLINE | Confirm the TV can reach `http://<your-ha-host>:8123` and the IP/host is correct. |
+| `TOKEN ERR` | The token is wrong or revoked; press BLUE and re-enter it. |
+| The app does not update | Bump `?v=` and reinstall/relaunch; HA caches `/local/` for 31 days. |
+| `https://` with a self-signed certificate | The TV does not trust it; use plain `http://` on the LAN or a trusted certificate. |
+| Launcher says "not configured" | The IPK was built without `LAUNCH_URL`; rebuild with your URL. |
+| Developer Mode stops working | Sessions expire after roughly 50 hours of use; reopen the Developer Mode app and reinstall. |
 
 ## Local development
 
@@ -123,7 +201,7 @@ on one port, and pushes two live events after subscription.
 
 ## Hardware test checklist (webOS 3.x)
 
-- [ ] `ares-package` + `ares-install` succeed and the app appears in the launcher
+- [ ] `package.sh` + `ares-install` succeed and the app appears in the launcher
 - [ ] Settings: URL prefilled, token entry works with the D-pad
 - [ ] The picker shows Toggles and Sensors tabs; sensor rows are present
 - [ ] Selecting switches and sensors and saving renders the tiles
@@ -152,10 +230,10 @@ and Canvas 2D. No CSS grid, custom properties, `fetch`, arrow functions,
 ## Scope
 
 Implemented: on-TV configuration, toggles, sensor tiles with icons and 24 h
-charts, WebSocket live updates with polling fallback, persistence, status.
+charts, WebSocket live updates with polling fallback, persistence, connection
+feedback and TV polish.
 
-Not yet: TV-optimized polish and layout tuning (Phase 4), larger chart detail
-views, arbitrary cross-origin servers, theming.
+Not yet: larger chart detail views, arbitrary cross-origin servers, theming.
 
 ## Deviations from the phase brief
 
