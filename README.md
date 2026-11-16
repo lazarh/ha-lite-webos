@@ -1,9 +1,9 @@
 # HA Lite for webOS 3.x
 
 A minimal, sideloadable Home Assistant dashboard for older LG smart TVs
-(webOS 3.x, Chromium 38). Configure it entirely from the TV remote: enter the
-access token with an on-screen D-pad keyboard, pick switches/lights from a
-D-pad list, and control them from a high-contrast tile grid.
+(webOS 3.x, Chromium 38). Configure it entirely from the TV remote, then watch
+switches and sensors with a high-contrast 10-foot UI. Live state changes arrive
+over the Home Assistant WebSocket API.
 
 ## Architecture: same-origin on Home Assistant
 
@@ -12,48 +12,50 @@ default (its `cors_allowed_origins` defaults to `cast.home-assistant.io` only).
 Instead of weakening that, the app is served **by Home Assistant itself**:
 
 - the app lives in `config/www/halite/`, so it is served at
-  `/local/halite/index.html` on the same origin as `/api/`;
-- calls to `/api/states/...` and `/api/services/...` are therefore same-origin,
-  with no CORS and no extra server configuration;
+  `/local/halite/index.html` on the same origin as `/api/` and `/api/websocket`;
+- REST and WebSocket calls are therefore same-origin, with no CORS and no extra
+  server configuration;
 - the sideloaded webOS app is only a tiny **launcher** that opens that URL, so
   the dashboard still appears in the TV's launcher.
 
 ```
 launcher/   webOS package installed on the TV (appinfo.json + redirect page)
 webapp/     the real app; copy into Home Assistant's config/www/halite/
-test/       same-origin mock Home Assistant + smoke test
+test/       same-origin mock Home Assistant (REST + WS) + smoke test
 ```
 
 The token is stored in the TV's `localStorage`, never in a served file (served
 files under `/local/` are public).
 
+## Features
+
+- Toggle tiles for `switch`, `light`, `input_boolean` (via `homeassistant.toggle`)
+- Sensor tiles for `sensor` and `binary_sensor`: device-class SVG icon, large
+  value + unit, and a 24-hour Canvas sparkline
+- **WebSocket live updates** (`state_changed`), with a 10 s REST poll fallback
+- D-pad configuration: URL (defaults to the page origin), token via a custom
+  on-screen keyboard, and a two-tab picker (Toggles / Sensors)
+- Up to 12 tiles; selection persists in `localStorage` across app restarts
+- Status pill (LOADING / ONLINE / OFFLINE / TOKEN ERR)
+
 ## Configure from the TV
 
 1. Launch **HA Lite** and press **BLUE** if settings are not already open.
-2. **Server URL** is prefilled with the page's origin (same-origin). Leave it
-   unless you know you need a different host.
-3. Select **Access token**, press **OK**, and type a long-lived token using the
-   D-pad keyboard. Create one in Home Assistant under
-   **Profile -> Long-lived access tokens**.
-4. Select **Connect & choose switches**. This validates the token and loads
-   the entity list (`switch`, `light`, `input_boolean`).
-5. In the picker, use **UP/DOWN** to move, **OK** to tick entities, then move
-   to **Save selection** and press **OK**.
-6. The dashboard shows the selected entities. **OK** toggles the focused tile.
-
-Everything persists in `localStorage` (`halite.config.v1`) and survives app
-restarts.
+2. **Server URL** is prefilled with the page's origin (same-origin). Leave it.
+3. Select **Access token**, press **OK**, and type a long-lived token with the
+   D-pad keyboard (Home Assistant: **Profile -> Long-lived access tokens**).
+4. Select **Connect & choose tiles**.
+5. Use **LEFT/RIGHT** to switch between **Toggles** and **Sensors**, **UP/DOWN**
+   to move, **OK** to tick, then move to **Save selection** and press **OK**.
+6. **OK** toggles the focused switch tile; sensor tiles are read-only.
 
 ### Optional: seed the token from a URL
 
-For a one-time setup you can append the token to the URL instead of typing it:
-
 ```
-http://<ha-host>:8123/local/halite/index.html?v=0.2.0#<long-lived-token>
+http://<ha-host>:8123/local/halite/index.html?v=0.3.0#<long-lived-token>
 ```
 
-The fragment is stored locally and stripped from the address bar. The on-TV
-keyboard remains the primary path.
+The fragment is stored locally and stripped from the address bar.
 
 ## Controls
 
@@ -61,7 +63,7 @@ keyboard remains the primary path.
 |---|---|
 | Dashboard | D-pad move, OK toggle, BLUE settings |
 | Settings (connection) | UP/DOWN move, OK activate, BLUE/Back close |
-| Entity picker | UP/DOWN move, OK tick, BLUE/Back to connection |
+| Entity picker | UP/DOWN move, LEFT/RIGHT tabs, OK tick, BLUE/Back |
 | On-screen keyboard | Arrows move, OK type, BLUE/Back cancel |
 
 Desktop shortcuts: arrows, Enter, `B`/`S` for BLUE, `Esc` to close.
@@ -78,19 +80,17 @@ Desktop shortcuts: arrows, Enter, `B`/`S` for BLUE, `Esc` to close.
    Verify `http://<ha-host>:8123/local/halite/index.html` returns the page.
 
    Home Assistant caches `/local/` files for 31 days. When you update the app,
-   bump the `?v=` query in `launcher/index.html` (and reload) to bust the TV's
-   cache.
+   bump the `?v=` query in `launcher/index.html` (and reload) to bust the cache.
 
 2. **Package and install the launcher**
 
    ```sh
    ares-package launcher -o dist
-   ares-install --device tv dist/com.halite.dashboard_0.2.0_all.ipk
+   ares-install --device tv dist/com.halite.dashboard_0.3.0_all.ipk
    ares-launch --device tv com.halite.dashboard
    ```
 
-3. Set `LAUNCH_URL` in `launcher/index.html` if your Home Assistant host or
-   path differs.
+3. Set `LAUNCH_URL` in `launcher/index.html` if your host or path differs.
 
 ## Local development
 
@@ -98,16 +98,14 @@ Desktop shortcuts: arrows, Enter, `B`/`S` for BLUE, `Esc` to close.
 ./test/smoke.sh
 ```
 
-The smoke test:
+The smoke test verifies:
 
-- extracts and syntax-checks the inline JavaScript;
-- runs `es-check es5`;
-- starts a same-origin mock Home Assistant (`test/mock_ha.py`) that serves both
-  the app and `/api/`;
-- checks the entity list, rejects unauthenticated reads, and toggles an entity
-  via `homeassistant.toggle`;
-- renders the first-run settings overlay and a configured three-tile dashboard
-  in headless Chromium.
+- ES5 syntax (`es-check`) of the inline JavaScript;
+- the entity list contains toggles and sensors;
+- the history endpoint returns points;
+- `homeassistant.toggle` changes state;
+- WebSocket auth + a pushed `state_changed` event;
+- first-run settings render and a configured render with a sensor canvas.
 
 Manual run:
 
@@ -116,23 +114,26 @@ python3 test/mock_ha.py --port 8099
 # open http://127.0.0.1:8099/local/halite/#demo-token
 ```
 
+The mock serves the app, REST, a synthetic 24 h history and the WebSocket API
+on one port, and pushes two live events after subscription.
+
 ## Hardware test checklist (webOS 3.x)
 
 - [ ] `ares-package` + `ares-install` succeed and the app appears in the launcher
-- [ ] BLUE opens Settings; URL is prefilled with the HA origin
-- [ ] Token entry works with the D-pad keyboard
-- [ ] Connect loads the entity list; sensors are not listed
-- [ ] Multiple entities can be ticked and saved
-- [ ] The dashboard shows the selected tiles; OK toggles the focused tile
+- [ ] Settings: URL prefilled, token entry works with the D-pad
+- [ ] The picker shows Toggles and Sensors tabs; sensor rows are present
+- [ ] Selecting switches and sensors and saving renders the tiles
+- [ ] Sensor tiles show icon, value, unit and a 24 h sparkline
+- [ ] Live WebSocket updates change tiles without waiting for the poll
 - [ ] Closing and relaunching the app keeps the configuration
 - [ ] Wrong token shows TOKEN ERR; stopping HA shows OFFLINE
 
 ## Compatibility
 
-Target: **Chromium 38** (webOS 3.0; also covers 3.5/Chromium 53). The code
-uses only ES5, `XMLHttpRequest`, `keyCode` keyboard events, flexbox and plain
-CSS. No CSS grid, custom properties, `fetch`, arrow functions, `let`/`const`,
-template literals, classes or external dependencies.
+Target: **Chromium 38** (webOS 3.0; also covers 3.5/Chromium 53). The code uses
+only ES5, `XMLHttpRequest`, `WebSocket`, `keyCode` events, flexbox, inline SVG
+and Canvas 2D. No CSS grid, custom properties, `fetch`, arrow functions,
+`let`/`const`, template literals, classes or external dependencies.
 
 ## Security notes
 
@@ -143,19 +144,20 @@ template literals, classes or external dependencies.
 
 ## Scope
 
-Implemented: on-TV connection setup (D-pad keyboard), entity list, multi-select
-of `switch`/`light`/`input_boolean`, multi-tile dashboard, persistence,
-`homeassistant.toggle`, connection status.
+Implemented: on-TV configuration, toggles, sensor tiles with icons and 24 h
+charts, WebSocket live updates with polling fallback, persistence, status.
 
-Not yet: sensor value tiles and charts (Phase 3), WebSocket live updates,
-polish/layout tuning (Phase 4), arbitrary cross-origin servers.
+Not yet: TV-optimized polish and layout tuning (Phase 4), larger chart detail
+views, arbitrary cross-origin servers, theming.
 
 ## Deviations from the phase brief
 
-- **Server URL defaults to the same origin** and token-only entry is the
-  supported path; arbitrary cross-origin URLs are not offered because they
-  would require CORS changes on the HA side.
-- **Selectable domains** are `switch`, `light`, and `input_boolean` (all
-  toggleable via `homeassistant.toggle`), not only `switch.*`.
-- **Keyboard entry** uses a custom D-pad keyboard rather than `window.prompt()`,
-  which is unreliable on webOS Chromium.
+- **WebSocket was added in this phase** (per request); the brief's steps only
+  mentioned the REST API, but live updates are what make "values update as data
+  changes" real.
+- **All `sensor` and `binary_sensor` entities are selectable** (per choice), not
+  just the numeric/chartable ones. Non-chartable sensors show a "no history"
+  placeholder in the chart area.
+- **24-hour chart window** (per choice) and a **two-tab picker**.
+- **Tiles are capped at 12** to protect low-memory TV hardware; the picker shows
+  the count.
