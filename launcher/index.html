@@ -70,9 +70,14 @@ html, body {
    *   <config>/www/halite/index.html  ->  /local/halite/index.html
    * This launcher only exists so the dashboard appears in the TV launcher.
    *
+   * package.sh substitutes the Home Assistant URL from the LAUNCH_URL
+   * environment variable at build time. Example:
+   *
+   *   LAUNCH_URL="http://your-ha-host:8123/local/halite/index.html?v=0.4.0" ./package.sh
+   *
    * The ?v= query busts Home Assistant's long static cache after an update.
    */
-  var LAUNCH_URL = 'http://your-ha-host:8123/local/halite/index.html?v=0.4.0';
+  var LAUNCH_URL = '__LAUNCH_URL__';
 
   /*
    * First-run convenience only. Set locally to seed the long-lived token
@@ -81,14 +86,29 @@ html, body {
    */
   var SEED_TOKEN = '';
 
+  var targetEl = document.getElementById('target');
+  var textEl = document.getElementById('text');
+
+  if (LAUNCH_URL.indexOf('__LAUNCH_URL__') !== -1) {
+    if (targetEl) {
+      targetEl.textContent = '';
+    }
+    if (textEl) {
+      textEl.textContent = 'Launcher not configured. Build with package.sh and LAUNCH_URL.';
+    }
+    return;
+  }
+
   var target = LAUNCH_URL;
   if (SEED_TOKEN) {
     target += '#' + SEED_TOKEN;
   }
 
-  var targetEl = document.getElementById('target');
   if (targetEl) {
     targetEl.textContent = LAUNCH_URL;
+  }
+  if (textEl) {
+    textEl.textContent = 'Opening dashboard...';
   }
 
   window.location.replace(target);
