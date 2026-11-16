@@ -270,6 +270,76 @@ body {
   color: #ff9f1a;
 }
 
+/* ------------------------------------------------------- tile tiers */
+
+#grid.tier-large .tile {
+  width: 560px;
+  height: 392px;
+  margin: 17px;
+}
+
+#grid.tier-medium .tile {
+  width: 520px;
+  height: 250px;
+  margin: 12px;
+  padding: 22px 26px;
+}
+
+#grid.tier-small .tile {
+  width: 430px;
+  height: 250px;
+  margin: 10px;
+  padding: 20px 22px;
+}
+
+#grid.tier-medium .badge,
+#grid.tier-small .badge {
+  font-size: 16px;
+  letter-spacing: 2px;
+}
+
+#grid.tier-medium .name,
+#grid.tier-small .name {
+  margin-top: 10px;
+  max-height: 54px;
+  font-size: 25px;
+}
+
+#grid.tier-medium .value,
+#grid.tier-small .value {
+  font-size: 46px;
+}
+
+#grid.tier-medium .sensor-tile .name,
+#grid.tier-small .sensor-tile .name {
+  max-height: 50px;
+  font-size: 23px;
+}
+
+#grid.tier-medium .sensor-readout .value,
+#grid.tier-small .sensor-readout .value {
+  font-size: 40px;
+}
+
+#grid.tier-medium .sensor-readout .unit,
+#grid.tier-small .sensor-readout .unit {
+  font-size: 20px;
+}
+
+#grid.tier-medium .spark,
+#grid.tier-small .spark {
+  height: 46px;
+  margin-top: 6px;
+}
+
+#grid.tier-medium .icon,
+#grid.tier-medium .icon svg,
+#grid.tier-small .icon,
+#grid.tier-small .icon svg {
+  width: 36px;
+  height: 36px;
+}
+
 .spark {
   display: block;
   width: 100%;
@@ -637,6 +707,245 @@ body {
   color: #ffffff;
 }
 
+/* --------------------------------------------------------- config UI */
+
+#config {
+  z-index: 55;
+}
+
+.config-panel {
+  width: 1400px;
+  max-height: 94%;
+  display: flex;
+  flex-direction: column;
+}
+
+.config-body {
+  padding: 8px 40px 0;
+  overflow: hidden;
+}
+
+.config-row {
+  margin-bottom: 14px;
+}
+
+.config-row-split {
+  display: flex;
+}
+
+.config-col {
+  flex: 1;
+  margin-right: 18px;
+}
+
+.config-col:last-child {
+  margin-right: 0;
+}
+
+.config-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 18px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #8a8a8a;
+}
+
+.config-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px 14px;
+  font-family: inherit;
+  font-size: 24px;
+  color: #f2f2f2;
+  background: #000000;
+  border: 2px solid #3a3a3a;
+  border-radius: 10px;
+}
+
+.config-input:focus {
+  outline: none;
+  border-color: #29d6ff;
+  box-shadow: 0 0 0 3px rgba(41, 214, 255, 0.35);
+}
+
+.config-hint {
+  margin-top: 6px;
+  font-size: 18px;
+  color: #8a8a8a;
+}
+
+.config-list {
+  height: 500px;
+  overflow-y: auto;
+  border: 2px solid #2a2a2a;
+  border-radius: 12px;
+  background: #0b0b0b;
+}
+
+.config-item {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid #1c1c1c;
+  font-size: 24px;
+}
+
+.config-item input[type="checkbox"] {
+  width: 26px;
+  height: 26px;
+  margin-right: 16px;
+}
+
+.config-item .ci-name {
+  flex: 1;
+}
+
+.config-item .ci-meta {
+  margin-left: 16px;
+  font-size: 19px;
+  color: #8a8a8a;
+}
+
+.config-item.selected {
+  background: #0a2229;
+}
+
+.config-actions {
+  padding: 10px 40px 22px;
+}
+
+.config-error {
+  padding: 6px 0;
+  font-size: 20px;
+  color: #ff6b6b;
+}
+
+/* ----------------------------------------------------------- themes */
+
+body.theme-blue #brand .accent,
+body.theme-blue .panel-title {
+  color: #4aa3ff;
+}
+
+body.theme-blue .tile.on {
+  background: #4aa3ff;
+  border-color: #4aa3ff;
+}
+
+body.theme-blue .tile.focused {
+  box-shadow: 0 0 0 8px #7cc4ff, 0 20px 60px rgba(0, 0, 0, 0.65);
+}
+
+body.theme-blue .sensor-readout .value {
+  color: #7cc4ff;
+}
+
+body.theme-blue .field.focused,
+body.theme-blue .btn.focused {
+  border-color: #7cc4ff;
+  box-shadow: 0 0 0 4px rgba(124, 196, 255, 0.3);
+}
+
+body.theme-blue .btn.primary,
+body.theme-blue .ptab.active,
+body.theme-blue .chk.on {
+  background: #4aa3ff;
+  border-color: #4aa3ff;
+}
+
+body.theme-blue .kb-key.focused {
+  border-color: #7cc4ff;
+  box-shadow: 0 0 0 4px rgba(124, 196, 255, 0.35);
+}
+
+body.theme-blue .config-input:focus {
+  border-color: #7cc4ff;
+  box-shadow: 0 0 0 3px rgba(124, 196, 255, 0.35);
+}
+
+body.theme-emerald #brand .accent,
+body.theme-emerald .panel-title {
+  color: #35e07a;
+}
+
+body.theme-emerald .tile.on {
+  background: #35e07a;
+  border-color: #35e07a;
+}
+
+body.theme-emerald .tile.focused {
+  box-shadow: 0 0 0 8px #7dffb0, 0 20px 60px rgba(0, 0, 0, 0.65);
+}
+
+body.theme-emerald .sensor-readout .value {
+  color: #7dffb0;
+}
+
+body.theme-emerald .field.focused,
+body.theme-emerald .btn.focused {
+  border-color: #7dffb0;
+  box-shadow: 0 0 0 4px rgba(125, 255, 176, 0.3);
+}
+
+body.theme-emerald .btn.primary,
+body.theme-emerald .ptab.active,
+body.theme-emerald .chk.on {
+  background: #35e07a;
+  border-color: #35e07a;
+}
+
+body.theme-emerald .kb-key.focused {
+  border-color: #7dffb0;
+  box-shadow: 0 0 0 4px rgba(125, 255, 176, 0.35);
+}
+
+body.theme-emerald .config-input:focus {
+  border-color: #7dffb0;
+  box-shadow: 0 0 0 3px rgba(125, 255, 176, 0.35);
+}
+
+body.theme-rose #brand .accent,
+body.theme-rose .panel-title {
+  color: #ff5f8f;
+}
+
+body.theme-rose .tile.on {
+  background: #ff5f8f;
+  border-color: #ff5f8f;
+}
+
+body.theme-rose .tile.focused {
+  box-shadow: 0 0 0 8px #ff9bb6, 0 20px 60px rgba(0, 0, 0, 0.65);
+}
+
+body.theme-rose .sensor-readout .value {
+  color: #ff9bb6;
+}
+
+body.theme-rose .field.focused,
+body.theme-rose .btn.focused {
+  border-color: #ff9bb6;
+  box-shadow: 0 0 0 4px rgba(255, 155, 182, 0.3);
+}
+
+body.theme-rose .btn.primary,
+body.theme-rose .ptab.active,
+body.theme-rose .chk.on {
+  background: #ff5f8f;
+  border-color: #ff5f8f;
+}
+
+body.theme-rose .kb-key.focused {
+  border-color: #ff9bb6;
+  box-shadow: 0 0 0 4px rgba(255, 155, 182, 0.35);
+}
+
+body.theme-rose .config-input:focus {
+  border-color: #ff9bb6;
+  box-shadow: 0 0 0 3px rgba(255, 155, 182, 0.35);
+}
+
 ::-webkit-scrollbar {
   width: 10px;
 }
@@ -668,7 +977,7 @@ body {
     </div>
   </main>
 
-  <footer id="footer">D-PAD Move &nbsp;&middot;&nbsp; OK Toggle &nbsp;&middot;&nbsp; BLUE Settings</footer>
+  <footer id="footer">D-PAD Move &nbsp;&middot;&nbsp; OK Toggle &nbsp;&middot;&nbsp; BLUE Settings &nbsp;&middot;&nbsp; GREEN Refresh</footer>
 </div>
 
 <div id="toast" class="toast hidden" role="status" aria-live="polite">
@@ -725,6 +1034,56 @@ body {
   </div>
 </div>
 
+<div id="config" class="overlay hidden">
+  <div class="panel config-panel">
+    <div class="panel-title">Configure HA Lite</div>
+    <div class="config-body">
+      <div class="config-row">
+        <label class="config-label" for="cfg-title">Title</label>
+        <input class="config-input" id="cfg-title" type="text" maxlength="60">
+      </div>
+      <div class="config-row config-row-split">
+        <div class="config-col">
+          <label class="config-label" for="cfg-theme">Theme</label>
+          <select class="config-input" id="cfg-theme">
+            <option value="amber">Amber</option>
+            <option value="blue">Blue</option>
+            <option value="emerald">Emerald</option>
+            <option value="rose">Rose</option>
+          </select>
+        </div>
+        <div class="config-col">
+          <label class="config-label" for="cfg-layout">Layout</label>
+          <select class="config-input" id="cfg-layout">
+            <option value="auto">Auto-fit</option>
+            <option value="large">Large tiles</option>
+            <option value="small">Small tiles</option>
+          </select>
+        </div>
+        <div class="config-col">
+          <label class="config-label" for="cfg-chart">Chart hours</label>
+          <input class="config-input" id="cfg-chart" type="number" min="1" max="168">
+        </div>
+        <div class="config-col">
+          <label class="config-label" for="cfg-refresh">Refresh seconds</label>
+          <input class="config-input" id="cfg-refresh" type="number" min="1" max="3600">
+        </div>
+      </div>
+      <div class="config-row">
+        <label class="config-label" for="cfg-search">Entities</label>
+        <input class="config-input" id="cfg-search" type="text" placeholder="Search by name or entity id...">
+        <div class="config-hint" id="cfg-count"></div>
+      </div>
+      <div class="config-list" id="cfg-list"></div>
+      <div class="config-error hidden" id="cfg-error"></div>
+    </div>
+    <div class="config-actions">
+      <button class="btn primary" id="cfg-save" type="button">Save configuration</button>
+      <button class="btn" id="cfg-cancel" type="button">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function (window, document, undefined) {
   'use strict';
@@ -735,6 +1094,7 @@ body {
   var LEGACY_TOKEN_KEY = 'halite.token';
   var TOGGLE_DOMAINS = ['switch', 'light', 'input_boolean'];
   var SENSOR_DOMAINS = ['sensor', 'binary_sensor'];
+  var SELECTABLE_DOMAINS = ['switch', 'light', 'input_boolean', 'sensor', 'binary_sensor'];
   var MAX_TILES = 12;
   var POLL_MS = 10000;
   var HISTORY_HOURS = 24;
@@ -756,10 +1116,21 @@ body {
 
   /* ------------------------------------------------------------- state */
 
-  var config = { url: '', token: '', entities: [] };
+  var config = {
+    url: '',
+    token: '',
+    entities: [],
+    theme: 'amber',
+    layout: 'auto',
+    title: 'HA Lite',
+    chart_hours: 24,
+    refresh_seconds: 10
+  };
   var entityCache = {};
 
   var dash = { items: [], els: [], focus: 0 };
+  var gridCols = 3;
+  var configUI = { open: false, all: [], selected: {}, filter: '', busy: false };
   var gen = 0;
   var pollTimer = null;
   var historyTimer = null;
@@ -1005,7 +1376,16 @@ body {
   /* --------------------------------------------------------- storage */
 
   function loadConfig() {
-    var cfg = { url: '', token: '', entities: [] };
+    var cfg = {
+      url: '',
+      token: '',
+      entities: [],
+      theme: 'amber',
+      layout: 'auto',
+      title: 'HA Lite',
+      chart_hours: 24,
+      refresh_seconds: 10
+    };
     var raw = null;
 
     try {
@@ -1030,6 +1410,21 @@ body {
               cfg.entities.push(data.entities[i]);
             }
           }
+        }
+        if (typeof data.theme === 'string') {
+          cfg.theme = data.theme;
+        }
+        if (typeof data.layout === 'string') {
+          cfg.layout = data.layout;
+        }
+        if (typeof data.title === 'string' && data.title) {
+          cfg.title = data.title;
+        }
+        if (data.chart_hours) {
+          cfg.chart_hours = data.chart_hours;
+        }
+        if (data.refresh_seconds) {
+          cfg.refresh_seconds = data.refresh_seconds;
         }
       }
     } else {
@@ -1149,6 +1544,29 @@ body {
   function setStatus(kind, text) {
     el.status.className = 'status ' + kind;
     el.statusText.textContent = text;
+  }
+
+  function applyTheme(theme) {
+    var allowed = ['amber', 'blue', 'emerald', 'rose'];
+    if (allowed.indexOf(theme) === -1) {
+      theme = 'amber';
+    }
+    document.body.className = 'theme-' + theme;
+  }
+
+  function gridTier() {
+    var count = config.entities.length;
+    var layout = config.layout || 'auto';
+    if (layout === 'large' || layout === 'small') {
+      return layout;
+    }
+    if (count <= 6) {
+      return 'large';
+    }
+    if (count <= 9) {
+      return 'medium';
+    }
+    return 'small';
   }
 
   function showToast(text, kind, duration) {
@@ -1349,13 +1767,12 @@ body {
     }
     el.grid.appendChild(fragment);
 
-    var rows = Math.ceil(config.entities.length / COLS);
-    if (rows > MAX_ROWS_BEFORE_SCROLL) {
-      el.grid.className = 'scroll';
-    } else {
-      el.grid.className = 'centered';
-      el.grid.scrollTop = 0;
-    }
+    var tier = gridTier();
+    gridCols = tier === 'small' ? 4 : 3;
+    var rows = Math.ceil(config.entities.length / gridCols);
+    var maxRows = tier === 'large' ? 2 : 3;
+    el.grid.className = 'tier-' + tier + (rows > maxRows ? ' scroll' : '');
+    el.grid.scrollTop = 0;
 
     applyTileClasses();
   }
@@ -2426,6 +2843,298 @@ body {
     }
   }
 
+  /* --------------------------------------------------------- config UI */
+
+  function isConfigRequested() {
+    return window.location.search.indexOf('config=1') !== -1 || window.location.hash === '#config';
+  }
+
+  function configSelectedCount() {
+    var count = 0;
+    var id;
+    for (id in configUI.selected) {
+      if (configUI.selected.hasOwnProperty(id) && configUI.selected[id]) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  function showConfigError(text) {
+    if (!el.cfgError) {
+      return;
+    }
+    el.cfgError.textContent = text;
+    el.cfgError.classList.remove('hidden');
+  }
+
+  function hideConfigError() {
+    if (!el.cfgError) {
+      return;
+    }
+    el.cfgError.textContent = '';
+    el.cfgError.classList.add('hidden');
+  }
+
+  function openConfigUI() {
+    if (!addonMode) {
+      showToast('Configuration is in the Home Assistant add-on', 'warn', 4000);
+      return;
+    }
+    configUI.open = true;
+    configUI.filter = '';
+    configUI.busy = false;
+    el.cfgTitle.value = config.title || 'HA Lite';
+    el.cfgTheme.value = config.theme || 'amber';
+    el.cfgLayout.value = config.layout || 'auto';
+    el.cfgChart.value = config.chart_hours || 24;
+    el.cfgRefresh.value = config.refresh_seconds || 10;
+    el.cfgSearch.value = '';
+    el.cfgList.innerHTML = '<div class="config-hint" style="padding:16px">Loading entities...</div>';
+    el.cfgCount.textContent = '';
+    hideConfigError();
+    el.configOverlay.classList.remove('hidden');
+    loadConfigEntities();
+  }
+
+  function closeConfigUI() {
+    configUI.open = false;
+    el.configOverlay.classList.add('hidden');
+    try {
+      window.history.replaceState(null, '', window.location.pathname);
+    } catch (e) {
+      /* ignore */
+    }
+  }
+
+  function loadConfigEntities() {
+    httpRequest({ method: 'GET', path: '/api/states' }, function (status, text) {
+      if (!configUI.open) {
+        return;
+      }
+      if (status !== 200) {
+        el.cfgList.innerHTML = '';
+        showConfigError(status === 401
+          ? 'Token invalid. Set the token in the add-on options, then reload.'
+          : 'Could not load entities (HTTP ' + status + ').');
+        return;
+      }
+      var data = parseJson(text);
+      if (!data || data.length === undefined) {
+        showConfigError('Unexpected entity response.');
+        return;
+      }
+      configUI.all = [];
+      var i;
+      for (i = 0; i < data.length; i++) {
+        var id = data[i].entity_id || '';
+        if (SELECTABLE_DOMAINS.indexOf(domainOf(id)) === -1) {
+          continue;
+        }
+        configUI.all.push(modelFromState(data[i]));
+      }
+      configUI.all.sort(function (a, b) {
+        var x = a.name.toLowerCase();
+        var y = b.name.toLowerCase();
+        if (x < y) {
+          return -1;
+        }
+        if (x > y) {
+          return 1;
+        }
+        return 0;
+      });
+      configUI.selected = {};
+      for (i = 0; i < config.entities.length; i++) {
+        configUI.selected[config.entities[i]] = true;
+      }
+      renderConfigList();
+    });
+  }
+
+  function renderConfigList() {
+    var query = configUI.filter.toLowerCase();
+    var fragment = document.createDocumentFragment();
+    var shown = 0;
+    var i;
+    for (i = 0; i < configUI.all.length; i++) {
+      var item = configUI.all[i];
+      if (query && item.name.toLowerCase().indexOf(query) === -1 &&
+          item.entity_id.toLowerCase().indexOf(query) === -1) {
+        continue;
+      }
+      shown++;
+      var selected = !!configUI.selected[item.entity_id];
+      var row = div('config-item' + (selected ? ' selected' : ''));
+      var chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.checked = selected;
+      var name = span('ci-name');
+      name.textContent = item.name;
+      var meta = span('ci-meta');
+      meta.textContent = item.domain + ' \u00b7 ' + valueFor(item) +
+        (unitFor(item) ? ' ' + unitFor(item) : '');
+      row.appendChild(chk);
+      row.appendChild(name);
+      row.appendChild(meta);
+
+      (function (entityId, checkbox, rowElement) {
+        checkbox.addEventListener('change', function () {
+          if (checkbox.checked && configSelectedCount() >= MAX_TILES) {
+            checkbox.checked = false;
+            showToast('Up to ' + MAX_TILES + ' tiles.', 'warn', 3000);
+            return;
+          }
+          if (checkbox.checked) {
+            configUI.selected[entityId] = true;
+          } else {
+            delete configUI.selected[entityId];
+          }
+          rowElement.className = 'config-item' + (checkbox.checked ? ' selected' : '');
+          updateConfigCount();
+        }, false);
+      })(item.entity_id, chk, row);
+
+      fragment.appendChild(row);
+    }
+
+    el.cfgList.innerHTML = '';
+    if (!shown) {
+      var empty = div('config-hint');
+      empty.style.padding = '16px';
+      empty.textContent = 'No matching entities.';
+      el.cfgList.appendChild(empty);
+    } else {
+      el.cfgList.appendChild(fragment);
+    }
+    updateConfigCount();
+  }
+
+  function updateConfigCount() {
+    var query = configUI.filter.toLowerCase();
+    var shown = 0;
+    var i;
+    for (i = 0; i < configUI.all.length; i++) {
+      var item = configUI.all[i];
+      if (query && item.name.toLowerCase().indexOf(query) === -1 &&
+          item.entity_id.toLowerCase().indexOf(query) === -1) {
+        continue;
+      }
+      shown++;
+    }
+    el.cfgCount.textContent = shown + ' shown \u00b7 ' +
+      configSelectedCount() + ' of ' + MAX_TILES + ' selected';
+  }
+
+  function saveConfigUI() {
+    if (configUI.busy) {
+      return;
+    }
+    var entities = [];
+    var id;
+    for (id in configUI.selected) {
+      if (configUI.selected.hasOwnProperty(id) && configUI.selected[id]) {
+        entities.push(id);
+      }
+    }
+    if (!entities.length) {
+      showConfigError('Select at least one tile.');
+      return;
+    }
+
+    var payload = {
+      entities: entities,
+      title: el.cfgTitle.value,
+      theme: el.cfgTheme.value,
+      layout: el.cfgLayout.value,
+      chart_hours: el.cfgChart.value,
+      refresh_seconds: el.cfgRefresh.value
+    };
+
+    configUI.busy = true;
+    el.cfgSave.textContent = 'Saving...';
+    hideConfigError();
+
+    var xhr = new XMLHttpRequest();
+    try {
+      xhr.open('POST', 'api/config', true);
+    } catch (e) {
+      configUI.busy = false;
+      el.cfgSave.textContent = 'Save configuration';
+      showConfigError('Could not start the save request.');
+      return;
+    }
+    xhr.timeout = 10000;
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.onreadystatechange = function () {
+      if (xhr.readyState !== 4) {
+        return;
+      }
+      configUI.busy = false;
+      el.cfgSave.textContent = 'Save configuration';
+      if (xhr.status >= 200 && xhr.status < 300) {
+        var response = parseJson(xhr.responseText || '');
+        var saved = response && response.config ? response.config : payload;
+        closeConfigUI();
+        applyAddonConfig(saved);
+        showToast('Configuration saved', 'ok', 3000);
+      } else {
+        showConfigError('Save failed (HTTP ' + xhr.status + ').');
+      }
+    };
+    xhr.onerror = function () {
+      configUI.busy = false;
+      el.cfgSave.textContent = 'Save configuration';
+      showConfigError('Save failed \u2014 cannot reach the add-on.');
+    };
+    xhr.ontimeout = xhr.onerror;
+    try {
+      xhr.send(JSON.stringify(payload));
+    } catch (e2) {
+      configUI.busy = false;
+      el.cfgSave.textContent = 'Save configuration';
+      showConfigError('Could not send the save request.');
+    }
+  }
+
+  function applyAddonConfig(saved) {
+    if (saved.entities && saved.entities.length !== undefined) {
+      config.entities = [];
+      var i;
+      for (i = 0; i < saved.entities.length; i++) {
+        if (typeof saved.entities[i] === 'string') {
+          config.entities.push(saved.entities[i]);
+        }
+      }
+    }
+    if (saved.title) {
+      config.title = saved.title;
+      document.title = saved.title;
+    }
+    if (saved.theme) {
+      config.theme = saved.theme;
+    }
+    if (saved.layout) {
+      config.layout = saved.layout;
+    }
+    if (saved.chart_hours) {
+      var hours = parseInt(saved.chart_hours, 10);
+      if (!isNaN(hours) && hours > 0) {
+        config.chart_hours = hours;
+        HISTORY_HOURS = hours;
+      }
+    }
+    if (saved.refresh_seconds) {
+      var seconds = parseInt(saved.refresh_seconds, 10);
+      if (!isNaN(seconds) && seconds > 0) {
+        config.refresh_seconds = seconds;
+        POLL_MS = seconds * 1000;
+      }
+    }
+    applyTheme(config.theme);
+    applyDashboard();
+  }
+
   /* ---------------------------------------------------------- keyboard */
 
   var LOWER_ROWS = [
@@ -2658,11 +3367,15 @@ body {
     } else if (code === KEYS.RIGHT) {
       moveDash(1, false);
     } else if (code === KEYS.UP) {
-      moveDash(-COLS, true);
+      moveDash(-gridCols, true);
     } else if (code === KEYS.DOWN) {
-      moveDash(COLS, true);
+      moveDash(gridCols, true);
     } else if (code === KEYS.ENTER) {
       toggleDashboard();
+    } else if (code === 404) {
+      refreshAll();
+      refreshHistoryAll();
+      showToast('Refreshed', 'ok', 2000);
     } else if (code === KEYS.BLUE || code === 66 || code === 83) {
       openSettings();
     } else {
@@ -2676,6 +3389,12 @@ body {
   }
 
   function onKeyDown(event) {
+    if (configUI.open) {
+      if (event.keyCode === KEYS.ESC) {
+        closeConfigUI();
+      }
+      return;
+    }
     if (keyboard.isOpen()) {
       keyboard.handleKey(event);
       return;
@@ -2735,6 +3454,7 @@ body {
   function startLocalMode() {
     config = loadConfig();
     seedFromHash();
+    applyTheme(config.theme || 'amber');
     applyDashboard();
 
     if (!config.token) {
@@ -2760,26 +3480,27 @@ body {
     config = {
       url: window.location.origin,
       token: typeof addonConfig.token === 'string' ? addonConfig.token : '',
-      entities: entities
+      entities: entities,
+      theme: addonConfig.theme || 'amber',
+      layout: addonConfig.layout || 'auto',
+      title: addonConfig.title || 'HA Lite',
+      chart_hours: addonConfig.chart_hours || 24,
+      refresh_seconds: addonConfig.refresh_seconds || 10
     };
 
-    if (addonConfig.title) {
-      document.title = String(addonConfig.title);
+    document.title = config.title;
+    applyTheme(config.theme);
+
+    var hours = parseInt(config.chart_hours, 10);
+    if (!isNaN(hours) && hours > 0) {
+      HISTORY_HOURS = hours;
     }
-    if (addonConfig.chart_hours) {
-      var hours = parseInt(addonConfig.chart_hours, 10);
-      if (!isNaN(hours) && hours > 0) {
-        HISTORY_HOURS = hours;
-      }
-    }
-    if (addonConfig.refresh_seconds) {
-      var seconds = parseInt(addonConfig.refresh_seconds, 10);
-      if (!isNaN(seconds) && seconds > 0) {
-        POLL_MS = seconds * 1000;
-      }
+    var seconds = parseInt(config.refresh_seconds, 10);
+    if (!isNaN(seconds) && seconds > 0) {
+      POLL_MS = seconds * 1000;
     }
     if (el.footer) {
-      el.footer.textContent = 'D-PAD Move \u00b7 OK Toggle';
+      el.footer.textContent = 'D-PAD Move \u00b7 OK Toggle \u00b7 GREEN Refresh';
     }
 
     if (!config.token) {
@@ -2789,9 +3510,12 @@ body {
         el.emptyTitle.textContent = 'Configure the add-on';
       }
       if (el.emptyText) {
-        el.emptyText.textContent = 'Set the token and entities in the HA Lite add-on options in Home Assistant.';
+        el.emptyText.textContent = 'Set the token in the HA Lite add-on options in Home Assistant.';
       }
       applyDashboard();
+      if (isConfigRequested()) {
+        openConfigUI();
+      }
       return;
     }
 
@@ -2801,13 +3525,19 @@ body {
         el.emptyTitle.textContent = 'Configure the add-on';
       }
       if (el.emptyText) {
-        el.emptyText.textContent = 'Add entities in the HA Lite add-on options in Home Assistant.';
+        el.emptyText.textContent = 'Open the configuration page (?config=1) in a browser and pick entities.';
       }
       applyDashboard();
+      if (isConfigRequested()) {
+        openConfigUI();
+      }
       return;
     }
 
     applyDashboard();
+    if (isConfigRequested()) {
+      openConfigUI();
+    }
   }
 
   function init() {
@@ -2833,10 +3563,35 @@ body {
     el.footer = byId('footer');
     el.emptyTitle = byId('empty-title');
     el.emptyText = byId('empty-text');
+    el.configOverlay = byId('config');
+    el.cfgTitle = byId('cfg-title');
+    el.cfgTheme = byId('cfg-theme');
+    el.cfgLayout = byId('cfg-layout');
+    el.cfgChart = byId('cfg-chart');
+    el.cfgRefresh = byId('cfg-refresh');
+    el.cfgSearch = byId('cfg-search');
+    el.cfgList = byId('cfg-list');
+    el.cfgCount = byId('cfg-count');
+    el.cfgSave = byId('cfg-save');
+    el.cfgCancel = byId('cfg-cancel');
+    el.cfgError = byId('cfg-error');
 
     keyboard = new Keyboard();
     collectConnFields();
     document.addEventListener('keydown', onKeyDown, false);
+
+    if (el.cfgSearch) {
+      el.cfgSearch.addEventListener('input', function () {
+        configUI.filter = this.value;
+        renderConfigList();
+      }, false);
+    }
+    if (el.cfgSave) {
+      el.cfgSave.addEventListener('click', saveConfigUI, false);
+    }
+    if (el.cfgCancel) {
+      el.cfgCancel.addEventListener('click', closeConfigUI, false);
+    }
 
     loadAddonConfig(function (addonConfig) {
       if (addonConfig) {

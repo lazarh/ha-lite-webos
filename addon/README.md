@@ -6,34 +6,48 @@ is nothing to copy into `config/www` and no CORS configuration.
 
 ## Configuration
 
-| Option | Description |
-|---|---|
-| `token` | A long-lived Home Assistant access token (Profile → Security → Long-lived access tokens). |
-| `entities` | The entity IDs to show on the TV, in order. Switches/lights/`input_boolean` are tappable; sensors show values and 24 h charts. |
-| `title` | Dashboard title (default `HA Lite`). |
-| `chart_hours` | History window for sensor sparklines, in hours (default `24`). |
-| `refresh_seconds` | REST polling fallback interval (default `10`). |
+The **token** is set in the add-on options (masked). Everything else is edited
+on the configuration page:
 
-Up to 12 tiles are shown.
+```
+http://<your-ha-host>:8099/?config=1
+```
+
+There you can:
+
+- **search** entities and tick real ones from the live Home Assistant list
+  (no typing exact entity IDs, invalid ones cannot be picked);
+- set the **title**;
+- pick a **theme**: Amber, Blue, Emerald or Rose;
+- pick a **layout**: auto-fit, large or small;
+- set the **chart window** (hours) and **refresh interval** (seconds).
+
+The configuration is stored in `/data/ha-lite.json` and survives updates.
 
 ## Open it
-
-After starting the add-on, open:
 
 ```
 http://<your-ha-host>:8099/
 ```
 
-The token and tile list come from the add-on options; there is no on-TV setup.
+The token and tile list come from the add-on; there is no on-TV setup.
+
+## Keys
+
+| Key | Action |
+|---|---|
+| D-pad | Move focus |
+| OK | Toggle the focused switch/light |
+| GREEN | Force an immediate refresh |
+| BLUE | Configuration hint (the config page is browser-based) |
 
 ## Put it on the TV
 
-Install the HA Lite launcher (sideload) and point it at the add-on URL. From
-the main repository:
+Install the HA Lite launcher (sideload) and point it at the add-on URL:
 
 ```sh
 LAUNCH_URL="http://<your-ha-host>:8099/" ./package.sh
-ares-install --device tv dist/com.halite.dashboard_0.5.1_all.ipk
+ares-install --device tv dist/com.halite.dashboard_0.6.0_all.ipk
 ares-launch --device tv com.halite.dashboard
 ```
 
