@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HA Lite</title>
 <style>
-/* HA Lite Phase 1 - single switch tile.
+/* HA Lite Phase 2 - remote-based configuration + multi-switch dashboard.
    Target: LG webOS 3.x, Chromium 38. ES5 only, same-origin REST.
    Deliberately avoids CSS grid, custom properties, flexbox gap and animations. */
 
@@ -117,34 +117,56 @@ body {
   background: #ff4d4d;
 }
 
-/* ------------------------------------------------------------- tile */
+/* -------------------------------------------------------------- grid */
 
 #main {
   flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#grid {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   justify-content: center;
-  padding: 10px 20px;
+  align-content: center;
   box-sizing: border-box;
+  padding: 10px 20px;
+  overflow-y: auto;
+}
+
+#grid.scroll {
+  align-content: flex-start;
+}
+
+#grid.centered {
+  overflow: hidden;
 }
 
 .tile {
   position: relative;
   box-sizing: border-box;
-  width: 760px;
-  height: 460px;
-  padding: 44px 48px;
+  width: 560px;
+  height: 396px;
+  margin: 18px;
+  padding: 36px 40px;
   display: flex;
   flex-direction: column;
   background: #0e0e0e;
-  border: 3px solid #262626;
-  border-radius: 22px;
+  border: 2px solid #262626;
+  border-radius: 18px;
   color: #f2f2f2;
   transition: background-color 120ms ease, box-shadow 120ms ease;
 }
 
 .tile.focused {
-  box-shadow: 0 0 0 8px #29d6ff, 0 24px 80px rgba(0, 0, 0, 0.7);
+  z-index: 2;
+  box-shadow: 0 0 0 6px #29d6ff, 0 20px 60px rgba(0, 0, 0, 0.65);
 }
 
 .tile.on {
@@ -154,7 +176,7 @@ body {
 }
 
 .badge {
-  font-size: 24px;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: 3px;
   color: #8f8f8f;
@@ -165,32 +187,55 @@ body {
 }
 
 .name {
-  margin-top: 42px;
-  font-size: 48px;
+  margin-top: 22px;
+  max-height: 86px;
+  font-size: 34px;
   font-weight: 600;
-  line-height: 1.15;
+  line-height: 1.2;
   overflow: hidden;
 }
 
 .value {
   margin-top: auto;
-  font-size: 110px;
+  font-size: 64px;
   font-weight: 800;
   letter-spacing: 1px;
   line-height: 1;
   word-break: break-word;
 }
 
-.entity {
-  margin-top: 14px;
-  font-size: 20px;
-  color: #5a5a5a;
-  word-break: break-all;
+#empty {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 40px;
+  text-align: center;
 }
 
-.tile.on .entity {
-  color: rgba(0, 0, 0, 0.45);
+#empty .empty-title {
+  font-size: 44px;
+  font-weight: 700;
+  color: #ffd400;
 }
+
+#empty .empty-text {
+  margin-top: 22px;
+  font-size: 28px;
+  color: #b0b0b0;
+}
+
+#empty .empty-text b {
+  color: #29d6ff;
+}
+
+/* ------------------------------------------------------------ footer */
 
 #footer {
   height: 70px;
@@ -202,7 +247,7 @@ body {
   color: #7c7c7c;
 }
 
-/* ----------------------------------------------------- token notice */
+/* ---------------------------------------------------------- overlays */
 
 .overlay {
   position: fixed;
@@ -218,11 +263,12 @@ body {
   z-index: 50;
 }
 
-.notice-panel {
-  width: 1040px;
-  max-height: 92%;
-  box-sizing: border-box;
-  padding: 40px 48px;
+#keyboard {
+  z-index: 60;
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.panel {
   background: #0a0a0a;
   border: 2px solid #333333;
   border-radius: 20px;
@@ -230,39 +276,234 @@ body {
 }
 
 .panel-title {
-  font-size: 38px;
+  padding: 28px 40px 0;
+  font-size: 36px;
   font-weight: 700;
   letter-spacing: 1px;
   color: #ffd400;
 }
 
-.panel-body {
-  margin-top: 22px;
-  font-size: 26px;
-  line-height: 1.4;
-  color: #d8d8d8;
+.panel-footer {
+  padding: 16px 40px 24px;
+  font-size: 19px;
+  letter-spacing: 2px;
+  color: #777777;
 }
 
-.panel-body.small {
-  margin-top: 18px;
-  font-size: 22px;
-  color: #9a9a9a;
+/* ---------------------------------------------------------- settings */
+
+.settings-panel {
+  width: 1100px;
+  max-height: 94%;
 }
 
-.panel-url {
-  margin-top: 18px;
-  padding: 18px 22px;
-  box-sizing: border-box;
-  font-size: 24px;
-  color: #31d7ff;
-  background: #051418;
-  border: 2px solid #123a44;
-  border-radius: 12px;
+.form-body {
+  padding: 24px 40px 8px;
+}
+
+.field {
+  margin-bottom: 16px;
+  padding: 18px 24px;
+  border: 2px solid #333333;
+  border-radius: 14px;
+  background: #101010;
+}
+
+.field.focused,
+.btn.focused {
+  border-color: #29d6ff;
+  background: #0a2229;
+  box-shadow: 0 0 0 4px rgba(41, 214, 255, 0.3);
+}
+
+.field-label {
+  font-size: 19px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: #8a8a8a;
+}
+
+.field-value {
+  margin-top: 8px;
+  font-size: 28px;
+  color: #f2f2f2;
   word-break: break-all;
 }
 
-.code {
-  color: #ffd400;
+.field-note {
+  margin-top: 8px;
+  font-size: 19px;
+  color: #6f6f6f;
+}
+
+.form-error {
+  margin: 4px 0 12px;
+  font-size: 22px;
+  color: #ff6b6b;
+}
+
+.form-actions {
+  display: flex;
+  padding: 8px 0 6px;
+}
+
+.btn {
+  padding: 18px 40px;
+  margin-right: 20px;
+  font-size: 26px;
+  font-weight: 600;
+  text-align: center;
+  color: #f2f2f2;
+  background: #141414;
+  border: 2px solid #3a3a3a;
+  border-radius: 14px;
+}
+
+.btn.primary {
+  background: #ffd400;
+  border-color: #ffd400;
+  color: #000000;
+}
+
+.btn.primary.focused {
+  border-color: #29d6ff;
+  box-shadow: 0 0 0 4px rgba(41, 214, 255, 0.5);
+}
+
+/* ------------------------------------------------------- entity picker */
+
+.entity-hint {
+  margin-bottom: 14px;
+  font-size: 22px;
+  letter-spacing: 1px;
+  color: #9a9a9a;
+}
+
+.entity-list {
+  position: relative;
+  max-height: 470px;
+  overflow-y: auto;
+  border: 2px solid #2a2a2a;
+  border-radius: 14px;
+  background: #0b0b0b;
+}
+
+.entity-row {
+  display: flex;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #1c1c1c;
+}
+
+.entity-row.focused {
+  background: #0a2229;
+  box-shadow: inset 0 0 0 3px #29d6ff;
+}
+
+.chk {
+  width: 26px;
+  height: 26px;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  margin-right: 20px;
+  border: 3px solid #555555;
+  border-radius: 6px;
+  background: #000000;
+}
+
+.chk.on {
+  background: #ffd400;
+  border-color: #ffd400;
+}
+
+.row-name {
+  flex: 1;
+  font-size: 26px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row-meta {
+  flex: 0 0 auto;
+  margin-left: 18px;
+  font-size: 20px;
+  color: #8a8a8a;
+}
+
+#save-entities {
+  margin-top: 6px;
+}
+
+/* ---------------------------------------------------------- keyboard */
+
+.kb-panel {
+  width: 1240px;
+}
+
+.kb-header {
+  padding: 22px 34px;
+  border-bottom: 1px solid #242424;
+}
+
+.kb-value {
+  margin-top: 8px;
+  min-height: 38px;
+  font-size: 30px;
+  color: #ffffff;
+  word-break: break-all;
+}
+
+.kb-grid {
+  padding: 20px 24px 8px;
+}
+
+.kb-row {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.kb-key {
+  box-sizing: border-box;
+  margin: 0 4px;
+  min-width: 70px;
+  height: 66px;
+  padding: 0 10px;
+  font-size: 28px;
+  color: #f2f2f2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #333333;
+  border-radius: 12px;
+  background: #141414;
+}
+
+.kb-key.wide {
+  min-width: 116px;
+  font-size: 20px;
+  letter-spacing: 2px;
+}
+
+.kb-key.focused {
+  background: #0a2229;
+  border-color: #29d6ff;
+  box-shadow: 0 0 0 4px rgba(41, 214, 255, 0.35);
+  color: #ffffff;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(41, 214, 255, 0.35);
+  border-radius: 5px;
 }
 </style>
 </head>
@@ -276,29 +517,59 @@ body {
   </header>
 
   <main id="main">
-    <div id="tile" class="tile focused" aria-live="polite">
-      <div class="badge">SWITCH</div>
-      <div class="name" id="tile-name">Bedroom 3 e4c400 3D Auto</div>
-      <div class="value" id="tile-value">...</div>
-      <div class="entity" id="tile-entity">switch.esphome_web_e4c400_3d_auto</div>
+    <div id="grid" class="centered"></div>
+    <div id="empty" class="hidden">
+      <div class="empty-title">No switches yet</div>
+      <div class="empty-text">Press <b>BLUE</b> on the remote to configure Home Assistant.</div>
     </div>
   </main>
 
-  <footer id="footer">OK Toggle &nbsp;&middot;&nbsp; HA Lite</footer>
+  <footer id="footer">D-PAD Move &nbsp;&middot;&nbsp; OK Toggle &nbsp;&middot;&nbsp; BLUE Settings</footer>
 </div>
 
-<div id="notice" class="overlay hidden">
-  <div class="notice-panel">
-    <div class="panel-title">Token required</div>
-    <div class="panel-body">
-      Open this page once with a long-lived Home Assistant token appended to the URL:
+<div id="settings" class="overlay hidden">
+  <div class="panel settings-panel">
+    <div class="panel-title">Settings</div>
+    <div class="form-body">
+      <div id="connection-view">
+        <div class="field focusable" data-action="edit-url">
+          <div class="field-label">Server URL</div>
+          <div class="field-value" id="value-url">(default)</div>
+          <div class="field-note">Defaults to this page's origin, which avoids browser CORS restrictions.</div>
+        </div>
+        <div class="field focusable" data-action="edit-token">
+          <div class="field-label">Access token</div>
+          <div class="field-value" id="value-token">(not set)</div>
+          <div class="field-note">Home Assistant: Profile &rarr; Long-lived access tokens. Press OK to type.</div>
+        </div>
+        <div class="form-error hidden" id="settings-error"></div>
+        <div class="form-actions">
+          <div class="btn primary focusable" data-action="connect" id="connect-btn">Connect &amp; choose switches</div>
+          <div class="btn focusable" data-action="cancel">Cancel</div>
+        </div>
+      </div>
+
+      <div id="entity-view" class="hidden">
+        <div class="entity-hint" id="entity-hint">Choose toggles with OK</div>
+        <div class="entity-list" id="entity-list"></div>
+        <div class="form-error hidden" id="entity-error"></div>
+        <div class="form-actions">
+          <div class="btn primary" id="save-entities">Save selection</div>
+        </div>
+      </div>
     </div>
-    <div class="panel-url" id="notice-url">this page</div>
-    <div class="panel-body small">
-      Append <span class="code">#&lt;token&gt;</span> to the address above. The token is stored
-      on the TV and removed from the address bar. Create one in Home Assistant under
-      Profile &rarr; Long-lived access tokens.
+    <div class="panel-footer" id="settings-footer">UP/DOWN move &nbsp;&middot;&nbsp; OK select &nbsp;&middot;&nbsp; BLUE close</div>
+  </div>
+</div>
+
+<div id="keyboard" class="overlay hidden">
+  <div class="panel kb-panel">
+    <div class="kb-header">
+      <div class="field-label" id="kb-label">Value</div>
+      <div class="kb-value" id="kb-value">(empty)</div>
     </div>
+    <div class="kb-grid" id="kb-grid"></div>
+    <div class="panel-footer">ARROWS move &nbsp;&middot;&nbsp; OK type &nbsp;&middot;&nbsp; BLUE cancel</div>
   </div>
 </div>
 
@@ -308,22 +579,45 @@ body {
 
   /* ------------------------------------------------------------ config */
 
-  var CONFIG = {
-    /* The single switch rendered in Phase 1. */
-    entityId: 'switch.esphome_web_e4c400_3d_auto',
-    fallbackName: 'Bedroom 3 e4c400 3D Auto',
-    /* Where the long-lived token is persisted on the TV. */
-    tokenStorageKey: 'halite.token',
-    /* Re-read the switch state periodically (no WebSocket in Phase 1). */
-    pollSeconds: 10
+  var STORAGE_KEY = 'halite.config.v1';
+  var LEGACY_TOKEN_KEY = 'halite.token';
+  var SELECTABLE_DOMAINS = ['switch', 'light', 'input_boolean'];
+  var POLL_MS = 10000;
+  var COLS = 3;
+  var MAX_ROWS_BEFORE_SCROLL = 2;
+
+  var KEYS = {
+    BACK: 461,
+    ESC: 27,
+    ENTER: 13,
+    LEFT: 37,
+    UP: 38,
+    RIGHT: 39,
+    DOWN: 40,
+    BLUE: 406
   };
 
-  var state = {
-    token: '',
-    entity: null,
-    status: 'loading',
-    busy: false
+  /* ------------------------------------------------------------- state */
+
+  var config = { url: '', token: '', entities: [] };
+  var entityCache = {};
+
+  var dash = { items: [], els: [], focus: 0 };
+  var gen = 0;
+  var pollTimer = null;
+
+  var settings = {
+    open: false,
+    view: 'connection',
+    focus: 0,
+    pending: { url: '', token: '' },
+    connecting: false,
+    session: 0
   };
+
+  var picker = { items: [], selected: {}, focus: 0, rowEls: [] };
+  var connFields = [];
+  var keyboard = null;
 
   var el = {};
 
@@ -331,41 +625,118 @@ body {
     return document.getElementById(id);
   }
 
-  /* -------------------------------------------------------- rendering */
-
-  function setStatus(kind, text) {
-    state.status = kind;
-    el.status.className = 'status ' + kind;
-    el.statusText.textContent = text;
+  function domainOf(entityId) {
+    var dot = entityId.indexOf('.');
+    return dot === -1 ? '' : entityId.substring(0, dot);
   }
 
-  function applyTile() {
-    var name = CONFIG.fallbackName;
-    var value = '...';
-    var on = false;
+  function normalizeBase(url) {
+    return String(url || '').replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
+  }
 
-    if (state.entity) {
-      name = state.entity.name || CONFIG.fallbackName;
-      value = state.entity.state === 'on'
-        ? 'ON'
-        : (state.entity.state === 'off' ? 'OFF' : String(state.entity.state).toUpperCase());
-      on = state.entity.state === 'on';
-    } else if (state.status === 'auth') {
-      value = 'AUTH';
-    } else if (state.status === 'offline') {
-      value = 'OFFLINE';
-    } else if (state.status === 'noconfig') {
-      value = 'NO TOKEN';
+  function parseJson(text) {
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function modelFromState(data) {
+    var attrs = data.attributes || {};
+    return {
+      entity_id: data.entity_id,
+      domain: domainOf(data.entity_id),
+      name: attrs.friendly_name || data.entity_id,
+      state: data.state
+    };
+  }
+
+  function valueFor(state) {
+    if (state === 'on') {
+      return 'ON';
+    }
+    if (state === 'off') {
+      return 'OFF';
+    }
+    return String(state || '...').toUpperCase();
+  }
+
+  /* --------------------------------------------------------- storage */
+
+  function loadConfig() {
+    var cfg = { url: '', token: '', entities: [] };
+    var raw = null;
+
+    try {
+      raw = window.localStorage.getItem(STORAGE_KEY);
+    } catch (e) {
+      raw = null;
     }
 
-    el.name.textContent = name;
-    el.value.textContent = value;
-    el.tile.className = 'tile focused' + (on ? ' on' : '');
+    if (raw) {
+      var data = parseJson(raw);
+      if (data) {
+        if (typeof data.url === 'string') {
+          cfg.url = data.url;
+        }
+        if (typeof data.token === 'string') {
+          cfg.token = data.token;
+        }
+        if (data.entities && data.entities.length !== undefined) {
+          var i;
+          for (i = 0; i < data.entities.length; i++) {
+            if (typeof data.entities[i] === 'string') {
+              cfg.entities.push(data.entities[i]);
+            }
+          }
+        }
+      }
+    } else {
+      try {
+        var legacy = window.localStorage.getItem(LEGACY_TOKEN_KEY);
+        if (legacy) {
+          cfg.token = legacy;
+        }
+      } catch (e2) {
+        /* ignore */
+      }
+    }
+
+    if (!cfg.url) {
+      cfg.url = window.location.origin;
+    }
+    return cfg;
   }
 
-  /* --------------------------------------------------------- http */
+  function saveConfig() {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+      window.localStorage.removeItem(LEGACY_TOKEN_KEY);
+    } catch (e) {
+      /* storage may be unavailable */
+    }
+  }
 
-  function request(method, path, body, callback) {
+  function seedFromHash() {
+    var hash = window.location.hash || '';
+    if (hash.length > 1) {
+      var raw = hash.substring(1);
+      if (raw.length > 5) {
+        config.token = raw;
+        saveConfig();
+        try {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch (e) {
+          /* ignore */
+        }
+      }
+    }
+  }
+
+  /* -------------------------------------------------------------- http */
+
+  function httpRequest(opts, callback) {
     var called = false;
 
     function finish(status, text) {
@@ -376,22 +747,29 @@ body {
       callback(status, text);
     }
 
+    var base = opts.base !== undefined ? normalizeBase(opts.base) : normalizeBase(config.url);
+    var token = opts.token !== undefined ? opts.token : config.token;
+    var url = opts.path;
+    if (base && base !== window.location.origin) {
+      url = base + opts.path;
+    }
+
     var xhr = new XMLHttpRequest();
     try {
-      xhr.open(method, path, true);
+      xhr.open(opts.method || 'GET', url, true);
     } catch (e) {
       finish(0, '');
       return;
     }
 
-    xhr.timeout = 8000;
+    xhr.timeout = 10000;
     try {
-      xhr.setRequestHeader('Authorization', 'Bearer ' + state.token);
-      if (body) {
+      xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+      if (opts.body) {
         xhr.setRequestHeader('Content-Type', 'application/json');
       }
     } catch (e2) {
-      /* ignore: headers can only be set after open() */
+      /* ignore */
     }
 
     xhr.onreadystatechange = function () {
@@ -420,146 +798,977 @@ body {
     };
 
     try {
-      xhr.send(body ? JSON.stringify(body) : null);
+      xhr.send(opts.body ? JSON.stringify(opts.body) : null);
     } catch (e5) {
       finish(0, '');
     }
   }
 
-  /* ---------------------------------------------------------- state */
+  /* -------------------------------------------------------- dashboard */
 
-  function loadState() {
-    if (!state.token) {
+  function setStatus(kind, text) {
+    el.status.className = 'status ' + kind;
+    el.statusText.textContent = text;
+  }
+
+  function modelFor(entityId) {
+    var cached = entityCache[entityId];
+    if (cached) {
+      return {
+        entity_id: cached.entity_id,
+        domain: cached.domain,
+        name: cached.name,
+        state: cached.state
+      };
+    }
+    return {
+      entity_id: entityId,
+      domain: domainOf(entityId),
+      name: entityId,
+      state: '...'
+    };
+  }
+
+  function buildGrid() {
+    el.grid.innerHTML = '';
+    dash.items = [];
+    dash.els = [];
+    dash.focus = 0;
+
+    if (!config.entities.length) {
+      el.empty.classList.remove('hidden');
+      return;
+    }
+    el.empty.classList.add('hidden');
+
+    var i;
+    for (i = 0; i < config.entities.length; i++) {
+      var item = modelFor(config.entities[i]);
+      var refs = document.createElement('div');
+      refs.className = 'tile';
+
+      var badge = document.createElement('div');
+      badge.className = 'badge';
+      badge.textContent = item.domain.toUpperCase();
+
+      var name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = item.name;
+
+      var value = document.createElement('div');
+      value.className = 'value';
+      value.textContent = valueFor(item.state);
+
+      refs.appendChild(badge);
+      refs.appendChild(name);
+      refs.appendChild(value);
+
+      el.grid.appendChild(refs);
+      dash.items.push(item);
+      dash.els.push({ tile: refs, badge: badge, name: name, value: value });
+    }
+
+    var rows = Math.ceil(config.entities.length / COLS);
+    if (rows > MAX_ROWS_BEFORE_SCROLL) {
+      el.grid.className = 'scroll';
+    } else {
+      el.grid.className = 'centered';
+      el.grid.scrollTop = 0;
+    }
+
+    applyTileClasses();
+  }
+
+  function applyTileClasses() {
+    var i;
+    for (i = 0; i < dash.els.length; i++) {
+      var item = dash.items[i];
+      var cls = 'tile';
+      if (item && item.state === 'on') {
+        cls += ' on';
+      }
+      if (i === dash.focus) {
+        cls += ' focused';
+      }
+      dash.els[i].tile.className = cls;
+    }
+  }
+
+  function updateTile(index) {
+    var item = dash.items[index];
+    var refs = dash.els[index];
+    if (!item || !refs) {
+      return;
+    }
+    refs.badge.textContent = item.domain.toUpperCase();
+    refs.name.textContent = item.name;
+    refs.value.textContent = valueFor(item.state);
+    applyTileClasses();
+  }
+
+  function ensureVisible(index) {
+    if (el.grid.className.indexOf('scroll') === -1) {
+      return;
+    }
+    var refs = dash.els[index];
+    if (!refs) {
+      return;
+    }
+    var top = refs.tile.offsetTop;
+    var bottom = top + refs.tile.offsetHeight;
+    if (top < el.grid.scrollTop) {
+      el.grid.scrollTop = top;
+    } else if (bottom > el.grid.scrollTop + el.grid.clientHeight) {
+      el.grid.scrollTop = bottom - el.grid.clientHeight;
+    }
+  }
+
+  function moveDash(delta, vertical) {
+    var count = dash.items.length;
+    if (!count) {
+      return;
+    }
+    var next = dash.focus + delta;
+    if (vertical) {
+      if (next < 0 || next >= count) {
+        return;
+      }
+    } else {
+      if (next < 0) {
+        next = count - 1;
+      }
+      if (next >= count) {
+        next = 0;
+      }
+    }
+    dash.focus = next;
+    applyTileClasses();
+    ensureVisible(next);
+  }
+
+  function toggleDashboard() {
+    var item = dash.items[dash.focus];
+    if (!item || !config.token) {
       return;
     }
 
-    request('GET', '/api/states/' + encodeURIComponent(CONFIG.entityId), null, function (status, text) {
+    var prev = item.state;
+    item.state = prev === 'on' ? 'off' : 'on';
+    updateTile(dash.focus);
+
+    var myGen = gen;
+    var index = dash.focus;
+
+    httpRequest({
+      method: 'POST',
+      path: '/api/services/homeassistant/toggle',
+      body: { entity_id: item.entity_id }
+    }, function (status) {
+      if (myGen !== gen) {
+        return;
+      }
+      if (status >= 200 && status < 300) {
+        setStatus('online', 'ONLINE');
+        window.setTimeout(function () {
+          if (myGen === gen) {
+            refreshOne(index);
+          }
+        }, 500);
+      } else {
+        item.state = prev;
+        updateTile(index);
+        setStatus(status === 401 ? 'auth' : 'offline', status === 401 ? 'TOKEN ERR' : 'OFFLINE');
+      }
+    });
+  }
+
+  function refreshOne(index) {
+    var item = dash.items[index];
+    if (!item) {
+      return;
+    }
+    var myGen = gen;
+    httpRequest({ method: 'GET', path: '/api/states/' + encodeURIComponent(item.entity_id) }, function (status, text) {
+      if (myGen !== gen) {
+        return;
+      }
       if (status === 200) {
-        var data = null;
-        try {
-          data = JSON.parse(text);
-        } catch (e) {
-          data = null;
-        }
+        var data = parseJson(text);
         if (data && data.entity_id) {
-          var attrs = data.attributes || {};
-          state.entity = {
-            entity_id: data.entity_id,
-            state: data.state,
-            name: attrs.friendly_name || CONFIG.fallbackName
-          };
+          var model = modelFromState(data);
+          entityCache[model.entity_id] = model;
+          dash.items[index] = model;
+          updateTile(index);
           setStatus('online', 'ONLINE');
-          applyTile();
+          return;
+        }
+      }
+      if (status === 401) {
+        setStatus('auth', 'TOKEN ERR');
+      } else {
+        setStatus('offline', 'OFFLINE');
+      }
+    });
+  }
+
+  function refreshAll() {
+    if (!config.token || !config.entities.length) {
+      return;
+    }
+
+    var myGen = gen;
+    var remaining = config.entities.length;
+    var successes = 0;
+    var auth = false;
+    var network = false;
+
+    var i;
+    for (i = 0; i < config.entities.length; i++) {
+      (function (index) {
+        httpRequest({
+          method: 'GET',
+          path: '/api/states/' + encodeURIComponent(config.entities[index])
+        }, function (status, text) {
+          if (myGen !== gen) {
+            return;
+          }
+          remaining--;
+          if (status === 200) {
+            var data = parseJson(text);
+            if (data && data.entity_id) {
+              var model = modelFromState(data);
+              entityCache[model.entity_id] = model;
+              dash.items[index] = model;
+              updateTile(index);
+              successes++;
+            }
+          } else if (status === 401) {
+            auth = true;
+          } else {
+            network = true;
+          }
+          if (remaining === 0) {
+            if (auth) {
+              setStatus('auth', 'TOKEN ERR');
+            } else if (successes > 0) {
+              setStatus('online', 'ONLINE');
+            } else if (network) {
+              setStatus('offline', 'OFFLINE');
+            }
+          }
+        });
+      })(i);
+    }
+  }
+
+  function stopPoll() {
+    if (pollTimer) {
+      window.clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function applyDashboard() {
+    gen++;
+    stopPoll();
+    buildGrid();
+
+    if (config.token && config.entities.length) {
+      setStatus('loading', 'LOADING');
+      refreshAll();
+      pollTimer = window.setInterval(refreshAll, POLL_MS);
+    }
+  }
+
+  /* ---------------------------------------------------------- settings */
+
+  function collectConnFields() {
+    connFields = [];
+    var nodes = el.connectionView.querySelectorAll('.focusable');
+    var i;
+    for (i = 0; i < nodes.length; i++) {
+      connFields.push(nodes[i]);
+    }
+  }
+
+  function tokenMask(token) {
+    if (!token) {
+      return '(not set)';
+    }
+    var dots = '';
+    var i;
+    for (i = 0; i < 8; i++) {
+      dots += '\u2022';
+    }
+    return dots + ' (' + token.length + ' chars)';
+  }
+
+  function highlightConnFocus() {
+    var i;
+    for (i = 0; i < connFields.length; i++) {
+      if (i === settings.focus) {
+        connFields[i].classList.add('focused');
+      } else {
+        connFields[i].classList.remove('focused');
+      }
+    }
+  }
+
+  function renderConnection() {
+    el.valueUrl.textContent = settings.pending.url || '(default)';
+    el.valueToken.textContent = tokenMask(settings.pending.token);
+    highlightConnFocus();
+  }
+
+  function showError(node, text) {
+    node.textContent = text;
+    node.classList.remove('hidden');
+  }
+
+  function hideError(node) {
+    node.textContent = '';
+    node.classList.add('hidden');
+  }
+
+  function openSettings() {
+    settings.open = true;
+    settings.view = 'connection';
+    settings.focus = 0;
+    settings.connecting = false;
+    settings.session++;
+    settings.pending = {
+      url: config.url || window.location.origin,
+      token: config.token || ''
+    };
+    el.connectionView.classList.remove('hidden');
+    el.entityView.classList.add('hidden');
+    hideError(el.settingsError);
+    hideError(el.entityError);
+    renderConnection();
+    el.settings.classList.remove('hidden');
+  }
+
+  function closeSettings() {
+    settings.open = false;
+    settings.session++;
+    if (keyboard.isOpen()) {
+      keyboard.close();
+    }
+    el.settings.classList.add('hidden');
+    applyTileClasses();
+  }
+
+  function openKeyboard(label, value, onDone) {
+    keyboard.open(label, value, function (result) {
+      onDone(result);
+    }, function () {
+      /* cancelled: keep the previous value */
+    });
+  }
+
+  function activateConnField() {
+    var field = connFields[settings.focus];
+    if (!field) {
+      return;
+    }
+    var action = field.getAttribute('data-action');
+
+    if (action === 'edit-url') {
+      openKeyboard('Server URL', settings.pending.url || window.location.origin, function (value) {
+        settings.pending.url = normalizeBase(value) || window.location.origin;
+        renderConnection();
+      });
+    } else if (action === 'edit-token') {
+      openKeyboard('Access token', settings.pending.token || '', function (value) {
+        settings.pending.token = value.replace(/\s+/g, '');
+        renderConnection();
+      });
+    } else if (action === 'connect') {
+      connectAndLoad();
+    } else if (action === 'cancel') {
+      closeSettings();
+    }
+  }
+
+  function connectAndLoad() {
+    if (settings.connecting) {
+      return;
+    }
+
+    var url = normalizeBase(settings.pending.url || window.location.origin) || window.location.origin;
+    var token = (settings.pending.token || '').replace(/\s+/g, '');
+
+    if (!token) {
+      showError(el.settingsError, 'Enter a long-lived access token.');
+      settings.focus = 1;
+      highlightConnFocus();
+      return;
+    }
+
+    settings.pending.url = url;
+    settings.pending.token = token;
+    settings.connecting = true;
+    el.connectBtn.textContent = 'Connecting...';
+    hideError(el.settingsError);
+
+    var session = settings.session;
+
+    httpRequest({ method: 'GET', path: '/api/states', base: url, token: token }, function (status, text) {
+      if (session !== settings.session) {
+        return;
+      }
+      settings.connecting = false;
+      el.connectBtn.textContent = 'Connect & choose switches';
+
+      if (status === 200) {
+        var data = parseJson(text);
+        if (data && data.length !== undefined) {
+          openPicker(data);
           return;
         }
       }
 
       if (status === 401) {
-        setStatus('auth', 'TOKEN ERR');
-      } else if (status === 404) {
-        setStatus('offline', 'NOT FOUND');
+        showError(el.settingsError, 'Invalid access token.');
+      } else if (status === 0) {
+        showError(el.settingsError, 'Cannot reach Home Assistant at ' + url + '.');
       } else {
-        setStatus('offline', 'OFFLINE');
+        showError(el.settingsError, 'Home Assistant returned HTTP ' + status + '.');
       }
-      applyTile();
+      highlightConnFocus();
     });
   }
 
-  function toggle() {
-    if (!state.token || !state.entity || state.busy) {
+  function openPicker(states) {
+    picker.items = [];
+    picker.selected = {};
+    picker.focus = 0;
+
+    var i;
+    for (i = 0; i < states.length; i++) {
+      var id = states[i].entity_id || '';
+      if (SELECTABLE_DOMAINS.indexOf(domainOf(id)) === -1) {
+        continue;
+      }
+      var model = modelFromState(states[i]);
+      entityCache[id] = model;
+      picker.items.push(model);
+    }
+
+    picker.items.sort(function (a, b) {
+      var x = a.name.toLowerCase();
+      var y = b.name.toLowerCase();
+      if (x < y) {
+        return -1;
+      }
+      if (x > y) {
+        return 1;
+      }
+      return 0;
+    });
+
+    if (!picker.items.length) {
+      showError(el.settingsError, 'No switches, lights, or input booleans found.');
       return;
     }
 
-    var prev = state.entity.state;
-    var next = prev === 'on' ? 'off' : 'on';
-
-    state.busy = true;
-    state.entity.state = next;
-    applyTile();
-
-    request('POST', '/api/services/switch/toggle', { entity_id: CONFIG.entityId }, function (status) {
-      state.busy = false;
-
-      if (status >= 200 && status < 300) {
-        setStatus('online', 'ONLINE');
-        /* Confirm against the server shortly after the service call. */
-        window.setTimeout(loadState, 500);
-      } else {
-        state.entity.state = prev;
-        applyTile();
-        if (status === 401) {
-          setStatus('auth', 'TOKEN ERR');
-        } else {
-          setStatus('offline', 'OFFLINE');
-        }
+    for (i = 0; i < picker.items.length; i++) {
+      if (config.entities.indexOf(picker.items[i].entity_id) !== -1) {
+        picker.selected[picker.items[i].entity_id] = true;
       }
-    });
+    }
+
+    settings.view = 'entities';
+    hideError(el.entityError);
+    el.connectionView.classList.add('hidden');
+    el.entityView.classList.remove('hidden');
+    renderPicker();
+    updatePickerHint();
   }
 
-  /* ---------------------------------------------------------- input */
+  function backToConnection() {
+    settings.view = 'connection';
+    el.entityView.classList.add('hidden');
+    el.connectionView.classList.remove('hidden');
+    renderConnection();
+  }
+
+  function renderPicker() {
+    el.entityList.innerHTML = '';
+    picker.rowEls = [];
+    el.entityList.scrollTop = 0;
+
+    var i;
+    for (i = 0; i < picker.items.length; i++) {
+      var item = picker.items[i];
+      var row = document.createElement('div');
+      row.className = 'entity-row';
+
+      var chk = document.createElement('span');
+      chk.className = 'chk';
+
+      var name = document.createElement('span');
+      name.className = 'row-name';
+      name.textContent = item.name;
+
+      var meta = document.createElement('span');
+      meta.className = 'row-meta';
+      meta.textContent = item.domain + ' \u00b7 ' + item.state;
+
+      row.appendChild(chk);
+      row.appendChild(name);
+      row.appendChild(meta);
+      el.entityList.appendChild(row);
+      picker.rowEls.push({ row: row, chk: chk });
+    }
+
+    highlightPickerFocus();
+  }
+
+  function updatePickerHint() {
+    var count = 0;
+    var id;
+    for (id in picker.selected) {
+      if (picker.selected.hasOwnProperty(id) && picker.selected[id]) {
+        count++;
+      }
+    }
+    el.entityHint.textContent = 'Choose toggles with OK \u00b7 ' + count + ' selected';
+  }
+
+  function highlightPickerFocus() {
+    var i;
+    for (i = 0; i < picker.rowEls.length; i++) {
+      if (i === picker.focus) {
+        picker.rowEls[i].row.className = 'entity-row focused';
+      } else {
+        picker.rowEls[i].row.className = 'entity-row';
+      }
+      if (picker.selected[picker.items[i].entity_id]) {
+        picker.rowEls[i].chk.className = 'chk on';
+      } else {
+        picker.rowEls[i].chk.className = 'chk';
+      }
+    }
+
+    if (picker.focus === picker.items.length) {
+      el.saveEntities.className = 'btn primary focused';
+    } else {
+      el.saveEntities.className = 'btn primary';
+    }
+
+    ensurePickerVisible();
+  }
+
+  function ensurePickerVisible() {
+    var container = el.entityList;
+    if (picker.focus >= picker.rowEls.length) {
+      container.scrollTop = container.scrollHeight;
+      return;
+    }
+    var row = picker.rowEls[picker.focus].row;
+    var top = row.offsetTop;
+    var bottom = top + row.offsetHeight;
+    if (top < container.scrollTop) {
+      container.scrollTop = top;
+    } else if (bottom > container.scrollTop + container.clientHeight) {
+      container.scrollTop = bottom - container.clientHeight;
+    }
+  }
+
+  function movePicker(delta) {
+    var max = picker.items.length;
+    var next = picker.focus + delta;
+    if (next < 0) {
+      next = max;
+    }
+    if (next > max) {
+      next = 0;
+    }
+    picker.focus = next;
+    highlightPickerFocus();
+  }
+
+  function activatePicker() {
+    if (picker.focus < picker.items.length) {
+      var id = picker.items[picker.focus].entity_id;
+      picker.selected[id] = !picker.selected[id];
+      highlightPickerFocus();
+      updatePickerHint();
+      return;
+    }
+    savePicker();
+  }
+
+  function savePicker() {
+    var ids = [];
+    var i;
+    for (i = 0; i < picker.items.length; i++) {
+      var id = picker.items[i].entity_id;
+      if (picker.selected[id]) {
+        ids.push(id);
+      }
+    }
+
+    if (!ids.length) {
+      showError(el.entityError, 'Select at least one toggle.');
+      return;
+    }
+
+    config.url = settings.pending.url || window.location.origin;
+    config.token = settings.pending.token;
+    config.entities = ids;
+    saveConfig();
+    closeSettings();
+    applyDashboard();
+  }
+
+  function handleSettingsKey(event) {
+    var code = event.keyCode;
+    var handled = true;
+
+    if (settings.connecting) {
+      if (code === KEYS.BLUE || code === KEYS.BACK || code === KEYS.ESC) {
+        closeSettings();
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+
+    if (settings.view === 'entities') {
+      if (code === KEYS.UP) {
+        movePicker(-1);
+      } else if (code === KEYS.DOWN) {
+        movePicker(1);
+      } else if (code === KEYS.ENTER) {
+        activatePicker();
+      } else if (code === KEYS.BLUE || code === KEYS.BACK || code === KEYS.ESC) {
+        backToConnection();
+      } else {
+        handled = false;
+      }
+    } else {
+      if (code === KEYS.UP) {
+        settings.focus = (settings.focus - 1 + connFields.length) % connFields.length;
+        highlightConnFocus();
+      } else if (code === KEYS.DOWN) {
+        settings.focus = (settings.focus + 1) % connFields.length;
+        highlightConnFocus();
+      } else if (code === KEYS.ENTER) {
+        activateConnField();
+      } else if (code === KEYS.BLUE || code === KEYS.BACK || code === KEYS.ESC) {
+        closeSettings();
+      } else {
+        handled = false;
+      }
+    }
+
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
+
+  /* ---------------------------------------------------------- keyboard */
+
+  var LOWER_ROWS = [
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+    ['q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p'],
+    ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', '@', '.'],
+    ['z', 'x', 'c', 'v', 'b', 'n', 'm', '-', '_', '/', ':'],
+    ['SHIFT', 'SYM', 'SPACE', 'CLR', 'DEL', 'DONE']
+  ];
+
+  var SYM_ROWS = [
+    ['!', '@', '#', '$', '%', '^', '&', '*', '(', ')'],
+    ['-', '_', '=', '+', '[', ']', '{', '}', ';', ':'],
+    ['"', '\'', '`', '~', '|', '\\', '<', '>', ',', '.'],
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
+    ['ABC', 'SPACE', 'CLR', 'DEL', 'DONE']
+  ];
+
+  function Keyboard() {
+    this.root = byId('keyboard');
+    this.labelEl = byId('kb-label');
+    this.valueEl = byId('kb-value');
+    this.gridEl = byId('kb-grid');
+    this.mode = 'lower';
+    this.value = '';
+    this.focusRow = 0;
+    this.focusCol = 0;
+    this.rows = [];
+    this.onDone = null;
+    this.onCancel = null;
+    this.build();
+  }
+
+  Keyboard.prototype.isOpen = function () {
+    return !this.root.classList.contains('hidden');
+  };
+
+  Keyboard.prototype.open = function (label, value, onDone, onCancel) {
+    this.labelEl.textContent = label;
+    this.value = value || '';
+    this.onDone = onDone || null;
+    this.onCancel = onCancel || null;
+    this.mode = 'lower';
+    this.focusRow = 0;
+    this.focusCol = 0;
+    this.build();
+    this.updateValue();
+    this.root.classList.remove('hidden');
+  };
+
+  Keyboard.prototype.close = function () {
+    this.root.classList.add('hidden');
+    this.onDone = null;
+    this.onCancel = null;
+  };
+
+  Keyboard.prototype.finish = function (commit) {
+    var callback = commit ? this.onDone : this.onCancel;
+    var value = this.value;
+    this.close();
+    if (typeof callback === 'function') {
+      callback(value);
+    }
+  };
+
+  Keyboard.prototype.keyLabel = function (code) {
+    if (code === 'SHIFT' || code === 'SYM' || code === 'ABC' || code === 'SPACE' || code === 'CLR' || code === 'DEL' || code === 'DONE') {
+      if (code === 'SYM') {
+        return '123';
+      }
+      return code;
+    }
+    if (this.mode === 'upper' && /^[a-z]$/.test(code)) {
+      return code.toUpperCase();
+    }
+    return code;
+  };
+
+  Keyboard.prototype.build = function () {
+    var layout = this.mode === 'sym' ? SYM_ROWS : LOWER_ROWS;
+    this.gridEl.innerHTML = '';
+    this.rows = [];
+
+    var rowIndex;
+    var colIndex;
+    for (rowIndex = 0; rowIndex < layout.length; rowIndex++) {
+      var rowElement = document.createElement('div');
+      rowElement.className = 'kb-row';
+      var rowItems = [];
+      for (colIndex = 0; colIndex < layout[rowIndex].length; colIndex++) {
+        var code = layout[rowIndex][colIndex];
+        var keyElement = document.createElement('div');
+        keyElement.className = 'kb-key' + (code.length > 1 ? ' wide' : '');
+        keyElement.textContent = this.keyLabel(code);
+        keyElement.setAttribute('data-code', code);
+        rowElement.appendChild(keyElement);
+        rowItems.push({ element: keyElement, code: code });
+      }
+      this.gridEl.appendChild(rowElement);
+      this.rows.push(rowItems);
+    }
+
+    if (this.focusRow >= this.rows.length) {
+      this.focusRow = this.rows.length - 1;
+    }
+    if (this.focusCol >= this.rows[this.focusRow].length) {
+      this.focusCol = this.rows[this.focusRow].length - 1;
+    }
+    this.updateFocus();
+  };
+
+  Keyboard.prototype.updateValue = function () {
+    this.valueEl.textContent = this.value ? this.value : '(empty)';
+  };
+
+  Keyboard.prototype.updateFocus = function () {
+    var row;
+    var col;
+    for (row = 0; row < this.rows.length; row++) {
+      for (col = 0; col < this.rows[row].length; col++) {
+        var focused = row === this.focusRow && col === this.focusCol;
+        if (focused) {
+          this.rows[row][col].element.classList.add('focused');
+        } else {
+          this.rows[row][col].element.classList.remove('focused');
+        }
+      }
+    }
+  };
+
+  Keyboard.prototype.moveRow = function (delta) {
+    var row = this.focusRow + delta;
+    if (row < 0) {
+      row = this.rows.length - 1;
+    }
+    if (row >= this.rows.length) {
+      row = 0;
+    }
+    this.focusRow = row;
+    if (this.focusCol >= this.rows[row].length) {
+      this.focusCol = this.rows[row].length - 1;
+    }
+    this.updateFocus();
+  };
+
+  Keyboard.prototype.moveCol = function (delta) {
+    var length = this.rows[this.focusRow].length;
+    this.focusCol = (this.focusCol + delta + length) % length;
+    this.updateFocus();
+  };
+
+  Keyboard.prototype.activate = function () {
+    var row = this.rows[this.focusRow];
+    if (!row) {
+      return;
+    }
+    var item = row[this.focusCol];
+    if (!item) {
+      return;
+    }
+    var code = item.code;
+
+    if (code === 'SHIFT') {
+      this.mode = this.mode === 'upper' ? 'lower' : 'upper';
+      this.build();
+      return;
+    }
+    if (code === 'SYM') {
+      this.mode = 'sym';
+      this.build();
+      return;
+    }
+    if (code === 'ABC') {
+      this.mode = 'lower';
+      this.build();
+      return;
+    }
+    if (code === 'SPACE') {
+      this.value += ' ';
+    } else if (code === 'CLR') {
+      this.value = '';
+    } else if (code === 'DEL') {
+      this.value = this.value.slice(0, -1);
+    } else if (code === 'DONE') {
+      this.finish(true);
+      return;
+    } else {
+      this.value += this.mode === 'upper' ? code.toUpperCase() : code;
+    }
+    this.updateValue();
+  };
+
+  Keyboard.prototype.handleKey = function (event) {
+    var code = event.keyCode;
+    var handled = true;
+
+    if (code === KEYS.LEFT) {
+      this.moveCol(-1);
+    } else if (code === KEYS.RIGHT) {
+      this.moveCol(1);
+    } else if (code === KEYS.UP) {
+      this.moveRow(-1);
+    } else if (code === KEYS.DOWN) {
+      this.moveRow(1);
+    } else if (code === KEYS.ENTER) {
+      this.activate();
+    } else if (code === KEYS.BACK || code === KEYS.ESC || code === KEYS.BLUE) {
+      this.finish(false);
+    } else if (code === 8) {
+      this.value = this.value.slice(0, -1);
+      this.updateValue();
+    } else if (event.key && event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      this.value += event.key;
+      this.updateValue();
+    } else {
+      handled = false;
+    }
+
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+
+  /* -------------------------------------------------------- key router */
+
+  function handleDashboardKey(event) {
+    var code = event.keyCode;
+    var handled = true;
+
+    if (code === KEYS.LEFT) {
+      moveDash(-1, false);
+    } else if (code === KEYS.RIGHT) {
+      moveDash(1, false);
+    } else if (code === KEYS.UP) {
+      moveDash(-COLS, true);
+    } else if (code === KEYS.DOWN) {
+      moveDash(COLS, true);
+    } else if (code === KEYS.ENTER) {
+      toggleDashboard();
+    } else if (code === KEYS.BLUE || code === 66 || code === 83) {
+      openSettings();
+    } else {
+      handled = false;
+    }
+
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
 
   function onKeyDown(event) {
-    if (event.keyCode === 13) {
-      event.preventDefault();
-      toggle();
-    }
-  }
-
-  /* ---------------------------------------------------------- token */
-
-  function readToken() {
-    var hash = window.location.hash || '';
-    if (hash.length > 1) {
-      var raw = hash.substring(1);
-      if (raw.length > 5) {
-        try {
-          window.localStorage.setItem(CONFIG.tokenStorageKey, raw);
-        } catch (e) {
-          /* storage may be unavailable */
-        }
-        try {
-          window.history.replaceState(null, '', window.location.pathname + window.location.search);
-        } catch (e2) {
-          /* ignore */
-        }
-        return raw;
-      }
-    }
-
-    try {
-      return window.localStorage.getItem(CONFIG.tokenStorageKey) || '';
-    } catch (e3) {
-      return '';
-    }
-  }
-
-  /* ----------------------------------------------------------- boot */
-
-  function init() {
-    el.status = byId('status');
-    el.statusText = byId('status-text');
-    el.tile = byId('tile');
-    el.name = byId('tile-name');
-    el.value = byId('tile-value');
-    el.notice = byId('notice');
-    el.noticeUrl = byId('notice-url');
-
-    document.addEventListener('keydown', onKeyDown, false);
-
-    state.token = readToken();
-
-    if (!state.token) {
-      setStatus('noconfig', 'NO TOKEN');
-      el.noticeUrl.textContent = window.location.href.split('#')[0];
-      el.notice.classList.remove('hidden');
-      applyTile();
+    if (keyboard.isOpen()) {
+      keyboard.handleKey(event);
       return;
     }
+    if (settings.open) {
+      handleSettingsKey(event);
+      return;
+    }
+    handleDashboardKey(event);
+  }
 
-    setStatus('loading', 'LOADING');
-    applyTile();
-    loadState();
-    window.setInterval(loadState, CONFIG.pollSeconds * 1000);
+  /* ------------------------------------------------------------- boot */
+
+  function init() {
+    el.grid = byId('grid');
+    el.empty = byId('empty');
+    el.status = byId('status');
+    el.statusText = byId('status-text');
+    el.settings = byId('settings');
+    el.connectionView = byId('connection-view');
+    el.entityView = byId('entity-view');
+    el.valueUrl = byId('value-url');
+    el.valueToken = byId('value-token');
+    el.settingsError = byId('settings-error');
+    el.entityError = byId('entity-error');
+    el.connectBtn = byId('connect-btn');
+    el.entityHint = byId('entity-hint');
+    el.entityList = byId('entity-list');
+    el.saveEntities = byId('save-entities');
+
+    keyboard = new Keyboard();
+    collectConnFields();
+    document.addEventListener('keydown', onKeyDown, false);
+
+    config = loadConfig();
+    seedFromHash();
+
+    applyDashboard();
+
+    if (!config.token) {
+      setStatus('noconfig', 'NO TOKEN');
+      openSettings();
+    } else if (!config.entities.length) {
+      setStatus('noconfig', 'SETUP');
+      openSettings();
+    }
   }
 
   if (document.readyState === 'loading') {
