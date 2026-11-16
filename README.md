@@ -60,7 +60,7 @@ files under `/local/` are public).
 ### Optional: seed the token from a URL
 
 ```
-http://<your-ha-host>:8123/local/halite/index.html?v=0.5.0#<long-lived-token>
+http://<your-ha-host>:8123/local/halite/index.html?v=0.5.1#<long-lived-token>
 ```
 
 The fragment is stored locally and stripped from the address bar.
@@ -117,7 +117,7 @@ Home Assistant API, so there is no `config/www` copying and no CORS setup.
 
    ```sh
    LAUNCH_URL="http://<your-ha-host>:8099/" ./package.sh
-   ares-install --device tv dist/com.halite.dashboard_0.5.0_all.ipk
+   ares-install --device tv dist/com.halite.dashboard_0.5.1_all.ipk
    ares-launch --device tv com.halite.dashboard
    ```
 
@@ -172,17 +172,17 @@ The app must be served by Home Assistant itself, on the same origin as its API
 3. Build the launcher with **your** Home Assistant URL:
 
    ```sh
-   LAUNCH_URL="http://<your-ha-host>:8123/local/halite/index.html?v=0.5.0" ./package.sh
+   LAUNCH_URL="http://<your-ha-host>:8123/local/halite/index.html?v=0.5.1" ./package.sh
    ```
 
-   This produces `dist/com.halite.dashboard_0.5.0_all.ipk` using only `ar` and
+   This produces `dist/com.halite.dashboard_0.5.1_all.ipk` using only `ar` and
    `tar` (no LG SDK required). The URL is baked in at build time, so every
    installation builds its own IPK.
 
 4. Install and launch:
 
    ```sh
-   ares-install --device tv dist/com.halite.dashboard_0.5.0_all.ipk
+   ares-install --device tv dist/com.halite.dashboard_0.5.1_all.ipk
    ares-launch --device tv com.halite.dashboard
    ```
 
@@ -197,7 +197,7 @@ and save. The token is stored only on the TV. (With the add-on, tiles come from
 the add-on options and settings are disabled.)
 
 Optional: seed the token once via the URL fragment
-`.../index.html?v=0.5.0#<token>` instead of typing it; it is stored and then
+`.../index.html?v=0.5.1#<token>` instead of typing it; it is stored and then
 stripped from the address bar.
 
 ### Updating

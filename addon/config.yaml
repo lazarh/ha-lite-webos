@@ -1,5 +1,5 @@
 name: HA Lite
-version: "0.5.0"
+version: "0.5.1"
 slug: ha_lite
 description: High-contrast Home Assistant dashboard for LG webOS 3.x TVs
 url: https://github.com/lazarh/ha-lite-webos

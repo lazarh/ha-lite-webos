@@ -33,7 +33,7 @@ the main repository:
 
 ```sh
 LAUNCH_URL="http://<your-ha-host>:8099/" ./package.sh
-ares-install --device tv dist/com.halite.dashboard_0.5.0_all.ipk
+ares-install --device tv dist/com.halite.dashboard_0.5.1_all.ipk
 ares-launch --device tv com.halite.dashboard
 ```
 

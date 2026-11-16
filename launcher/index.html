@@ -89,7 +89,7 @@ html, body {
   var targetEl = document.getElementById('target');
   var textEl = document.getElementById('text');
 
-  if (LAUNCH_URL.indexOf('__LAUNCH_URL__') !== -1) {
+  if (!/^https?:\/\//i.test(LAUNCH_URL)) {
     if (targetEl) {
       targetEl.textContent = '';
     }
