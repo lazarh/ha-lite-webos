@@ -67,10 +67,12 @@ html, body {
 
   /*
    * The real app is hosted by Home Assistant itself (same-origin):
-   *   <config>/www/halite/index.html  ->  /local/halite/
+   *   <config>/www/halite/index.html  ->  /local/halite/index.html
    * This launcher only exists so the dashboard appears in the TV launcher.
+   *
+   * The ?v= query busts Home Assistant's long static cache after an update.
    */
-  var LAUNCH_URL = 'http://your-ha-host:8123/local/halite/';
+  var LAUNCH_URL = 'http://your-ha-host:8123/local/halite/index.html?v=0.1.0';
 
   /*
    * First-run convenience only. Set locally to seed the long-lived token

@@ -10,8 +10,8 @@ Home Assistant's browser security policy blocks cross-origin API calls by
 default (its `cors_allowed_origins` defaults to `cast.home-assistant.io` only).
 Instead of weakening that, the real app is served **by Home Assistant itself**:
 
-- the app lives in `config/www/halite/`, so it is served at `/local/halite/`
-  on the same origin as `/api/`;
+- the app lives in `config/www/halite/`, so it is served at
+  `/local/halite/index.html` on the same origin as `/api/`;
 - calls to `/api/states/...` and `/api/services/...` are therefore same-origin,
   with no CORS and no extra server configuration;
 - the sideloaded webOS app is only a tiny **launcher** that opens that URL, so
@@ -55,7 +55,11 @@ Set `LAUNCH_URL` in `launcher/index.html` to wherever you host the app, e.g.
    ```
 
    (Create `/config/www/halite/` first if needed.) Verify:
-   `http://<ha-host>:8123/local/halite/` returns the page.
+   `http://<ha-host>:8123/local/halite/index.html` returns the page.
+
+   Home Assistant caches `/local/` files for 31 days. When you update the app,
+   bump the `?v=` query in `launcher/index.html` (and reload the page) to bust
+   the TV's cache.
 
 2. **Package and install the launcher**
 
@@ -70,7 +74,7 @@ Set `LAUNCH_URL` in `launcher/index.html` to wherever you host the app, e.g.
    Open the app URL with the token appended, e.g.
 
    ```
-   http://your-ha-host:8123/local/halite/#<long-lived-token>
+   http://your-ha-host:8123/local/halite/index.html?v=0.1.0#<long-lived-token>
    ```
 
    Create the token in Home Assistant under **Profile -> Long-lived access
